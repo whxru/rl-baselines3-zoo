@@ -27,3 +27,6 @@ keys/
 .cache
 *.lprof
 *.prof
+
+# Ignore custom env and feature extractor
+rl_zoo3/aoi-cbu/
