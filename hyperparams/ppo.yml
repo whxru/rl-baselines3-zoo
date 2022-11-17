@@ -1,3 +1,20 @@
+gowalla:
+  n_envs: 5
+  n_steps: 10240
+  batch_size: 5120
+  policy: rl_zoo3.aoi_cbu.feature_extractor.DynamicPoIFeatureExtractor
+  policy_kwargs: "dict(
+        net_arch=[64, 128, 64],
+        features_extractor_class=DynamicPoIFeatureExtractor,
+        features_extractor_kwargs=dict(
+            env_target='gowalla',
+            num_out_channel_feat=64,
+            num_out_channel_aoi=32,
+            device='cuda:0'
+        )
+    )"
+  normalize: True
+
 atari:
   env_wrapper:
     - stable_baselines3.common.atari_wrappers.AtariWrapper
