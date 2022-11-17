@@ -30,3 +30,5 @@ keys/
 
 # Ignore custom env and feature extractor
 rl_zoo3/aoi_cbu/
+!rl_zoo3/aoi_cbu/feature_extractor.py
+!rl_zoo3/aoi_cbu/custom_multi_input.py
