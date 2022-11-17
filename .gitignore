@@ -29,4 +29,4 @@ keys/
 *.prof
 
 # Ignore custom env and feature extractor
-rl_zoo3/aoi-cbu/
+rl_zoo3/aoi_cbu/
