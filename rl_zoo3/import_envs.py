@@ -60,3 +60,11 @@ for env_id in MaskVelocityWrapper.velocity_indices.keys():
         id=f"{name}NoVel-v{version}",
         entry_point=create_no_vel_env(env_id),
     )
+
+from aoi_cbu.env_hybrid import HybridCentralizedAoICbuEnv
+
+register(
+    id="gowalla",
+    entry_point=HybridCentralizedAoICbuEnv,
+    max_episode_steps=1440
+)
