@@ -15,7 +15,7 @@ from stable_baselines3.common.callbacks import CheckpointCallback
 from stable_baselines3.common.env_util import make_vec_env
 
 try:
-    from .env_hybrid import HybridCentralizedAoICbuEnv
+    from env.env_hybrid import HybridCentralizedAoICbuEnv
 except ModuleNotFoundError:
     from rl_zoo3.aoi_cbu.env_hybrid import HybridCentralizedAoICbuEnv
 
