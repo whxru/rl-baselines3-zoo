@@ -68,12 +68,6 @@ def sample_ppo_params(trial: optuna.Trial) -> Dict[str, Any]:
         "max_grad_norm": max_grad_norm,
         "vf_coef": vf_coef,
         # "sde_sample_freq": sde_sample_freq,
-        "policy_kwargs": dict(
-            # log_std_init=log_std_init,
-            net_arch=net_arch,
-            activation_fn=activation_fn,
-            ortho_init=ortho_init,
-        ),
     }
 
 
