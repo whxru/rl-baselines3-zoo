@@ -136,12 +136,6 @@ def sample_trpo_params(trial: optuna.Trial) -> Dict[str, Any]:
         "learning_rate": learning_rate,
         "gae_lambda": gae_lambda,
         # "sde_sample_freq": sde_sample_freq,
-        "policy_kwargs": dict(
-            # log_std_init=log_std_init,
-            net_arch=net_arch,
-            activation_fn=activation_fn,
-            ortho_init=ortho_init,
-        ),
     }
 
 
