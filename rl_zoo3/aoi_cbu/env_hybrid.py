@@ -12,14 +12,12 @@ class HybridCentralizedAoICbuEnv(gym.Env):
             self,
             target='gowalla',
             training_set_split_ratio=0.7,
-            env_name='',
             manual_set_instance_idx=None,
             seed=1997,
     ):
 
         self.load_config(target)
-        self.T = None
-        self.env_name = env_name
+        self.env_name = target
 
         self._is_training = True
         self._evaluation_inst_idx = 0
@@ -29,8 +27,6 @@ class HybridCentralizedAoICbuEnv(gym.Env):
         self.device = torch.device('cpu')
         self.manual_set_instance_idx = manual_set_instance_idx
 
-        self.T = self.poi_active[0].shape[1]
-        self.N_instance = self.poi_active.shape[0]
         self.max_train_inst_idx = int(self.N_instance * training_set_split_ratio) - 1
 
         self.action_space = Discrete(self.K)
@@ -56,10 +52,9 @@ class HybridCentralizedAoICbuEnv(gym.Env):
         for config_name in ['p', 'w', 'o', 'beta', 'active']:
             res_config.append(np.load(real_path(f'{config_name}_{NK_suffix}.npy')))
         self.p, self.w, self.o, self.beta, self.poi_active = res_config
-        computed_config_path = real_path(f'computed_config_{NK_suffix}.npy')
-        if not os.path.isfile(computed_config_path):
-            self._compute_config(save_to=computed_config_path)
-        self._edges, self._vtx_props, self._poi_indices, self._source_indices = np.load(computed_config_path, allow_pickle=True).tolist()
+        self.o = self.o * self.beta
+        self.N_instance = self.poi_active.shape[0]
+        self.T = self.poi_active[0].shape[1]
 
     @property
     def current_instance_idx(self):
@@ -67,11 +62,7 @@ class HybridCentralizedAoICbuEnv(gym.Env):
 
     @property
     def active_poi_indices(self):
-        return self._poi_indices[self.current_instance_idx][self.t]
-
-    @property
-    def active_source_indices(self):
-        return self._source_indices[self.current_instance_idx][self.t]
+        return np.argwhere(self.poi_active[self.current_instance_idx, :, self.t] == 1).ravel()
 
     @property
     def current_w(self):
@@ -79,45 +70,9 @@ class HybridCentralizedAoICbuEnv(gym.Env):
         res[res == 0] = 1
         return res
 
-    @property
-    def current_vtx_prop(self):
-        return self._vtx_props[self.current_instance_idx][self.t]
-
-    @staticmethod
-    def norm_graph_index(edges):
-        uniq_source_indices = np.unique(edges[:, 0])
-        uniq_poi_indices = np.unique(edges[:, 1])
-        source_map = dict(zip(uniq_source_indices, np.arange(len(uniq_source_indices))))
-        poi_map = dict(zip(uniq_poi_indices, np.arange(len(uniq_source_indices), len(uniq_source_indices) + len(uniq_poi_indices) + 1)))
-        res_props = [[1, 0]] * len(uniq_source_indices) + [[0, 1]] * len(uniq_poi_indices)
-        res_edges = []
-        for source, poi in edges:
-            res_edges.append([source_map[source], poi_map[poi]])
-        return res_edges, res_props, uniq_poi_indices, uniq_source_indices
-
     def enable_evaluation(self, enable=True, inst_idx=0):
         self._is_training = not enable
         self._evaluation_inst_idx = inst_idx
-
-    def _compute_config(self, save_to):
-        df_coverage = pd.DataFrame(self.beta).stack().reset_index().rename(columns={'level_0': 'source', 'level_1': 'PoI', 0: 'covered'})
-        res_edges = [[] for _ in range(self.N_instance)]
-        res_props = [[] for _ in range(self.N_instance)]
-        res_poi_indices = [[] for _ in range(self.N_instance)]
-        res_source_indices = [[] for _ in range(self.N_instance)]
-        for inst_idx, poi_ac in enumerate(self.poi_active):
-            df_ac = pd.DataFrame(poi_ac).stack().reset_index().rename(columns={'level_0': 'PoI', 'level_1': 't', 0: 'active'})
-            df_merge = df_ac.merge(df_coverage, on='PoI', how='outer', suffixes=('', ''))
-            df_merge.drop(df_merge[df_merge['active'] + df_merge['covered'] < 2].index, inplace=True)
-            for t in range(self.T):
-                print(f'Day {inst_idx}, Minute {t}')
-                original_record = df_merge[df_merge['t'] == t][['source', 'PoI']].to_numpy()
-                r_edges, r_props, r_poi_indices, r_source_indices = self.norm_graph_index(original_record)
-                res_edges[inst_idx].append(r_edges)
-                res_props[inst_idx].append(r_props)
-                res_poi_indices[inst_idx].append(r_poi_indices)
-                res_source_indices[inst_idx].append(r_source_indices)
-        np.save(save_to, [res_edges, res_props, res_poi_indices, res_source_indices])
 
     def _compute_obs(self, change_selected_inst_idx=False):
         if self._is_training and change_selected_inst_idx:
@@ -128,12 +83,7 @@ class HybridCentralizedAoICbuEnv(gym.Env):
 
         poi_active = np.zeros(self.N)
         poi_active[self.active_poi_indices] = 1
-        # res_obs = {
-        #     "poi_active": torch.tensor(poi_active, dtype=torch.int),
-        #     "weight": torch.tensor(self.current_w, dtype=torch.float),
-        #     "AoI": torch.tensor(self.target_AoIs, dtype=torch.float),
-        #     "t": torch.tensor([self.t])
-        # }
+
         res_obs = {
             "poi_active": poi_active,
             "weight": self.current_w,

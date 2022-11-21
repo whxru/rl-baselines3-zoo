@@ -32,3 +32,4 @@ keys/
 rl_zoo3/aoi_cbu/config/
 #!rl_zoo3/aoi_cbu/feature_extractor.py
 #!rl_zoo3/aoi_cbu/custom_multi_input.py
+*.log
