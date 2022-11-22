@@ -13,7 +13,7 @@ gowalla-v1:
             computation_config=dict(
                 normalize_mu_feat_first=True,
                 w_mult_y=False,
-                activation_func='sigmoid',
+                activation_func='relu',
                 use_gru=True
             )
         )
