@@ -101,6 +101,7 @@ class DynamicPoIFeatureExtractor(BaseFeaturesExtractor):
             kkt_feat = torch.squeeze(kkt_feat)
         else:
             kkt_feat = torch.flatten(kkt_feat)
+        kkt_feat = activation_func(kkt_feat)
         kkt_aoi = torch.mm(beta, self.expand_to_out_channels(w * AoI, self.num_out_channel_aoi)) * self.mu_aoi
         kkt_aoi = activation_func(kkt_aoi)
         kkt_aoi = torch.flatten(kkt_aoi)

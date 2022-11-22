@@ -13,6 +13,7 @@ class HybridCentralizedAoICbuEnv(gym.Env):
             target='gowalla',
             training_set_split_ratio=0.7,
             manual_set_instance_idx=None,
+            instance_pick_type='rr',
             seed=1997,
     ):
 
@@ -25,9 +26,12 @@ class HybridCentralizedAoICbuEnv(gym.Env):
         self.K = self.beta.shape[0]
         self.N = self.beta.shape[1]
         self.device = torch.device('cpu')
-        self.manual_set_instance_idx = manual_set_instance_idx
 
+        self.manual_set_instance_idx = manual_set_instance_idx
+        self.instance_pick_type = instance_pick_type
         self.max_train_inst_idx = int(self.N_instance * training_set_split_ratio) - 1
+        self.candidate_indices = self.manual_set_instance_idx if self.manual_set_instance_idx is not None else np.arange(self.max_train_inst_idx)
+        self.last_selected_inst_idx = 0
 
         self.action_space = Discrete(self.K)
         self.observation_space = Dict({
@@ -58,7 +62,7 @@ class HybridCentralizedAoICbuEnv(gym.Env):
 
     @property
     def current_instance_idx(self):
-        return self.last_selected_inst_idx if self._is_training else self._evaluation_inst_idx
+        return self.candidate_indices[self.last_selected_inst_idx] if self._is_training else self._evaluation_inst_idx
 
     @property
     def active_poi_indices(self):
@@ -76,10 +80,10 @@ class HybridCentralizedAoICbuEnv(gym.Env):
 
     def _compute_obs(self, change_selected_inst_idx=False):
         if self._is_training and change_selected_inst_idx:
-            if self.manual_set_instance_idx is not None:
-                self.last_selected_inst_idx = np.random.choice(self.manual_set_instance_idx)
-            else:
-                self.last_selected_inst_idx = np.random.randint(low=0, high=self.max_train_inst_idx)
+            if self.instance_pick_type == 'rand':
+                self.last_selected_inst_idx = np.random.choice(np.arange(len(self.candidate_indices)))
+            elif self.instance_pick_type == 'rr':
+                self.last_selected_inst_idx = (self.last_selected_inst_idx + 1) % len(self.candidate_indices)
 
         poi_active = np.zeros(self.N)
         poi_active[self.active_poi_indices] = 1
@@ -99,7 +103,6 @@ class HybridCentralizedAoICbuEnv(gym.Env):
 
     def reset_stat_vars(self):
         self.t = 0
-        self.last_selected_inst_idx = 0
         self.target_AoIs = np.zeros(self.N)
         self.sum_AoI = 0
 
