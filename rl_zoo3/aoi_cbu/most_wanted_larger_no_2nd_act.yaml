@@ -15,7 +15,7 @@ gowalla-v1:
                 w_mult_y=False,
                 activation_func='sigmoid',
                 use_gru=True,
-                use_second_activation_func=True
+                use_second_activation_func=False
             )
         )
     )"
