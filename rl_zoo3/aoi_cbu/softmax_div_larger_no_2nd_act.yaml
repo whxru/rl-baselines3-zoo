@@ -5,7 +5,7 @@ gowalla-v1:
   batch_size: 5120
   policy: rl_zoo3.aoi_cbu.custom_multi_input.CustomMultiInputPolicy
   policy_kwargs: "dict(
-        net_arch=[256, 512, 128],
+        net_arch=[256, 512, 256],
         features_extractor_kwargs=dict(
             env_target='gowalla',
             num_out_channel_feat=64,
