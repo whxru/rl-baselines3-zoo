@@ -78,13 +78,7 @@ class HybridCentralizedAoICbuEnv(gym.Env):
         self._is_training = not enable
         self._evaluation_inst_idx = inst_idx
 
-    def _compute_obs(self, change_selected_inst_idx=False):
-        if self._is_training and change_selected_inst_idx:
-            if self.instance_pick_type == 'rand':
-                self.last_selected_inst_idx = np.random.choice(np.arange(len(self.candidate_indices)))
-            elif self.instance_pick_type == 'rr':
-                self.last_selected_inst_idx = (self.last_selected_inst_idx + 1) % len(self.candidate_indices)
-
+    def _compute_obs(self):
         poi_active = np.zeros(self.N)
         poi_active[self.active_poi_indices] = 1
 
@@ -123,8 +117,6 @@ class HybridCentralizedAoICbuEnv(gym.Env):
         old_aoi_sum = np.dot(w, self.target_AoIs[self.active_poi_indices])
 
         if np.random.random() <= self.p[selected_source]:
-            # successfully_update = np.random.random(self.N) < self.o[selected_source]
-            # successfully_update_indices = np.argwhere(successfully_update).ravel()
             self.target_AoIs[np.random.random(self.N) < self.o[selected_source]] = 1
 
         if len(self.active_poi_indices) > 0:
@@ -144,7 +136,11 @@ class HybridCentralizedAoICbuEnv(gym.Env):
 
         if done:
             self.AoI_record.append(self.sum_AoI / self.T)
-            # print(self.sum_AoI / self.T)
+            if self._is_training:
+                if self.instance_pick_type == 'rand':
+                    self.last_selected_inst_idx = np.random.choice(np.arange(len(self.candidate_indices)))
+                elif self.instance_pick_type == 'rr':
+                    self.last_selected_inst_idx = (self.last_selected_inst_idx + 1) % len(self.candidate_indices)
 
         return obs, reward, done, info
 
@@ -153,7 +149,7 @@ class HybridCentralizedAoICbuEnv(gym.Env):
 
     def reset(self):
         self.reset_stat_vars()
-        return self._compute_obs(change_selected_inst_idx=True)
+        return self._compute_obs()
 
 
 if __name__ == '__main__':

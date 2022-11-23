@@ -85,6 +85,7 @@ class DynamicPoIFeatureExtractor(BaseFeaturesExtractor):
             'sigmoid': F.sigmoid,
             'leaky_relu': F.leaky_relu,
             'rrelu': F.rrelu,
+            'tanh': F.tanh
         }[self.computation_config['activation_func']]
 
         mu_feat = self.mu_feat if 'normalize_mu_feat_first' not in self.computation_config or not self.computation_config['normalize_mu_feat_first'] else F.softmax(self.mu_feat)
@@ -96,12 +97,14 @@ class DynamicPoIFeatureExtractor(BaseFeaturesExtractor):
             kkt_feat = torch.mm(beta, w_expand * y)
         else:
             kkt_feat = torch.mm(beta, w_expand / y)
+
+        if 'use_second_activation_func' in self.computation_config and self.computation_config['use_second_activation_func']:
+            kkt_feat = activation_func(kkt_feat)
         if 'use_gru' in self.computation_config and self.computation_config['use_gru']:
             kkt_feat, hidden_w = self.gru(torch.reshape(torch.flatten(kkt_feat), (1, 1, self.K * self.num_out_channel_feat)))
             kkt_feat = torch.squeeze(kkt_feat)
         else:
             kkt_feat = torch.flatten(kkt_feat)
-        kkt_feat = activation_func(kkt_feat)
         kkt_aoi = torch.mm(beta, self.expand_to_out_channels(w * AoI, self.num_out_channel_aoi)) * self.mu_aoi
         kkt_aoi = activation_func(kkt_aoi)
         kkt_aoi = torch.flatten(kkt_aoi)
