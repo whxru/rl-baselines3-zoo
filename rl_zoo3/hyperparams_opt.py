@@ -414,9 +414,30 @@ def sample_dqn_params(trial: optuna.Trial) -> Dict[str, Any]:
     subsample_steps = trial.suggest_categorical("subsample_steps", [1, 2, 4, 8])
     gradient_steps = max(train_freq // subsample_steps, 1)
 
-    net_arch = trial.suggest_categorical("net_arch", ["tiny", "small", "medium"])
-
-    net_arch = {"tiny": [64], "small": [64, 64], "medium": [256, 256]}[net_arch]
+    candidate_policy_kwargs = [dict(
+        net_arch=net_arch,
+        features_extractor_kwargs=dict(
+            env_target='gowalla',
+            num_out_channel_feat=num_out_feat,
+            num_out_channel_aoi=num_out_aoi,
+            computation_config=dict(
+                normalize_mu_feat_first=normalize_mu_feat_first,
+                w_mult_y=False,
+                activation_func=act,
+                use_gru=True,
+                use_second_activation_func=use_second_act
+            )
+        )
+    ) for net_arch, num_out_feat, num_out_aoi, normalize_mu_feat_first, act, use_gru, use_second_act in itertools.product(
+        [[64, 64], [256, 256], [128, 128]],
+        [32, 64, 128],
+        [32, 64, 128],
+        [True],  # Normalize mu feat first
+        ['sigmoid', 'tanh', 'relu', 'leaky_relu'],
+        [True],  # use gru
+        [True]  # use second act
+    )]
+    policy_kwargs = trial.suggest_categorical('policy_kwargs', candidate_policy_kwargs)
 
     hyperparams = {
         "gamma": gamma,
@@ -429,7 +450,7 @@ def sample_dqn_params(trial: optuna.Trial) -> Dict[str, Any]:
         "exploration_final_eps": exploration_final_eps,
         "target_update_interval": target_update_interval,
         "learning_starts": learning_starts,
-        "policy_kwargs": dict(net_arch=net_arch),
+        "policy_kwargs": policy_kwargs,
     }
 
     if trial.using_her_replay_buffer:
