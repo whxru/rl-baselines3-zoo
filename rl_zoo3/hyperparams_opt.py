@@ -18,10 +18,12 @@ def sample_ppo_params(trial: optuna.Trial) -> Dict[str, Any]:
     :param trial:
     :return:
     """
-    batch_size = trial.suggest_categorical("batch_size", [16, 32, 64, 128, 256, 512, 1024, 2048])
+    # batch_size = trial.suggest_categorical("batch_size", [16, 32, 64, 128, 256, 512, 1024, 2048])
     # batch_size = trial.suggest_categorical("batch_size", [64, 256, 512, 1024, 4096, 6144, 8192])
     # n_steps = trial.suggest_categorical("n_steps", [64, 256, 512, 1024, 4096, 6144, 8192, 10240, 14336])
-    n_steps = trial.suggest_categorical("n_steps", [16, 32, 64, 128, 256, 512, 1024, 2048])
+    # n_steps = trial.suggest_categorical("n_steps", [16, 32, 64, 128, 256, 512, 1024, 2048])
+    batch_size = trial.suggest_categorical("batch_size", [64])
+    n_steps = trial.suggest_categorical("n_steps", [512])
     gamma = trial.suggest_categorical("gamma", [0.9, 0.95, 0.98, 0.99, 0.995, 0.999, 0.9999])
     learning_rate = trial.suggest_loguniform("learning_rate", 1e-5, 1)
     lr_schedule = "constant"
@@ -66,19 +68,14 @@ def sample_ppo_params(trial: optuna.Trial) -> Dict[str, Any]:
             )
         )
     ) for net_arch, num_out_feat, num_out_aoi, normalize_mu_feat_first, act, use_gru, use_second_act in itertools.product(
-        [[64, 64], [256, 256]],
-        [32, 64],
-        [32, 64],
-        [True, False],
-        ['sigmoid', 'tanh'],
-        [True, False],
-        [True, False]
+        [[64, 64], [256, 256], [128, 128]],
+        [32, 64, 128],
+        [32, 64, 128],
+        [True],  # Normalize mu feat first
+        ['sigmoid', 'tanh', 'relu', 'leaky_relu'],
+        [True],  # use gru
+        [True]  # use second act
     )]
-    # candidate_policy_kwargs_names = [json.dumps(a) for a in candidate_policy_kwargs]
-    # policy_kwargs = trial.suggest_categorical('policy_kwargs', candidate_policy_kwargs)
-    # policy_kwargs = {
-    #     name: [d] for name, d in zip(candidate_policy_kwargs_names, candidate_policy_kwargs)
-    # }[trial.suggest_categorical('policy_kwargs', candidate_policy_kwargs)]
     policy_kwargs = trial.suggest_categorical('policy_kwargs', candidate_policy_kwargs)
     return {
         "n_steps": n_steps,
