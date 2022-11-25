@@ -30,7 +30,7 @@ class HybridCentralizedAoICbuEnv(gym.Env):
         self.manual_set_instance_idx = manual_set_instance_idx
         self.instance_pick_type = instance_pick_type
         self.max_train_inst_idx = int(self.N_instance * training_set_split_ratio) - 1
-        self.candidate_indices = self.manual_set_instance_idx if self.manual_set_instance_idx is not None else np.arange(self.max_train_inst_idx)
+        self.candidate_indices = self.manual_set_instance_idx if self.manual_set_instance_idx is not None else np.arange(self.max_train_inst_idx + 1)
         self.last_selected_inst_idx = 0
 
         self.action_space = Discrete(self.K)
