@@ -32,6 +32,7 @@ from stable_baselines3.common.utils import get_device, is_vectorized_observation
 
 from stable_baselines3.common.policies import ActorCriticPolicy
 from stable_baselines3.dqn.policies import DQNPolicy
+from stable_baselines3.td3 import MultiInputPolicy as MultiInputDDPGPolicy
 from rl_zoo3.aoi_cbu.feature_extractor import DynamicPoIFeatureExtractor
 
 
@@ -151,4 +152,36 @@ class CustomMultiInputDQNPolicy(DQNPolicy):
             normalize_images,
             optimizer_class,
             optimizer_kwargs,
+        )
+
+
+class CustomMultiInputDDPGPolicy(MultiInputDDPGPolicy):
+    def __init__(
+        self,
+        observation_space: gym.spaces.Dict,
+        action_space: gym.spaces.Space,
+        lr_schedule: Schedule,
+        net_arch: Optional[Union[List[int], Dict[str, List[int]]]] = None,
+        activation_fn: Type[nn.Module] = nn.ReLU,
+        # features_extractor_class: Type[BaseFeaturesExtractor] = CombinedExtractor,
+        features_extractor_kwargs: Optional[Dict[str, Any]] = None,
+        normalize_images: bool = True,
+        optimizer_class: Type[th.optim.Optimizer] = th.optim.Adam,
+        optimizer_kwargs: Optional[Dict[str, Any]] = None,
+        n_critics: int = 2,
+        share_features_extractor: bool = False,
+    ):
+        super().__init__(
+            observation_space,
+            action_space,
+            lr_schedule,
+            net_arch,
+            activation_fn,
+            DynamicPoIFeatureExtractor,
+            features_extractor_kwargs,
+            normalize_images,
+            optimizer_class,
+            optimizer_kwargs,
+            n_critics,
+            share_features_extractor
         )

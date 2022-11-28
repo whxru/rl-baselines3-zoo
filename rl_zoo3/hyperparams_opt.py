@@ -11,6 +11,31 @@ import json
 import itertools
 
 
+candidate_policy_kwargs = [dict(
+        net_arch=net_arch,
+        features_extractor_kwargs=dict(
+            env_target='gowalla',
+            num_out_channel_feat=num_out_feat,
+            num_out_channel_aoi=num_out_aoi,
+            computation_config=dict(
+                normalize_mu_feat_first=normalize_mu_feat_first,
+                w_mult_y=False,
+                activation_func=act,
+                use_gru=True,
+                use_second_activation_func=use_second_act
+            )
+        )
+    ) for net_arch, num_out_feat, num_out_aoi, normalize_mu_feat_first, act, use_gru, use_second_act in itertools.product(
+        [[64, 64], [256, 256], [128, 128]],
+        [32, 64, 128],
+        [32, 64, 128],
+        [True],  # Normalize mu feat first
+        ['sigmoid', 'tanh', 'relu', 'leaky_relu'],
+        [True],  # use gru
+        [True]  # use second act
+    )]
+
+
 def sample_ppo_params(trial: optuna.Trial) -> Dict[str, Any]:
     """
     Sampler for PPO hyperparams.
@@ -53,29 +78,7 @@ def sample_ppo_params(trial: optuna.Trial) -> Dict[str, Any]:
 
     # Independent networks usually work best
     # when not working with images
-    candidate_policy_kwargs = [dict(
-        net_arch=net_arch,
-        features_extractor_kwargs=dict(
-            env_target='gowalla',
-            num_out_channel_feat=num_out_feat,
-            num_out_channel_aoi=num_out_aoi,
-            computation_config=dict(
-                normalize_mu_feat_first=normalize_mu_feat_first,
-                w_mult_y=False,
-                activation_func=act,
-                use_gru=True,
-                use_second_activation_func=use_second_act
-            )
-        )
-    ) for net_arch, num_out_feat, num_out_aoi, normalize_mu_feat_first, act, use_gru, use_second_act in itertools.product(
-        [[64, 64], [256, 256], [128, 128]],
-        [32, 64, 128],
-        [32, 64, 128],
-        [True],  # Normalize mu feat first
-        ['sigmoid', 'tanh', 'relu', 'leaky_relu'],
-        [True],  # use gru
-        [True]  # use second act
-    )]
+
     policy_kwargs = trial.suggest_categorical('policy_kwargs', candidate_policy_kwargs)
     return {
         "n_steps": n_steps,
@@ -359,14 +362,9 @@ def sample_ddpg_params(trial: optuna.Trial) -> Dict[str, Any]:
     noise_std = trial.suggest_uniform("noise_std", 0, 1)
 
     # NOTE: Add "verybig" to net_arch when tuning HER (see TD3)
-    net_arch = trial.suggest_categorical("net_arch", ["small", "medium", "big"])
     # activation_fn = trial.suggest_categorical('activation_fn', [nn.Tanh, nn.ReLU, nn.ELU, nn.LeakyReLU])
 
-    net_arch = {
-        "small": [64, 64],
-        "medium": [256, 256],
-        "big": [400, 300],
-    }[net_arch]
+    policy_kwargs = trial.suggest_categorical('policy_kwargs', candidate_policy_kwargs)
 
     hyperparams = {
         "gamma": gamma,
@@ -376,7 +374,7 @@ def sample_ddpg_params(trial: optuna.Trial) -> Dict[str, Any]:
         "buffer_size": buffer_size,
         "train_freq": train_freq,
         "gradient_steps": gradient_steps,
-        "policy_kwargs": dict(net_arch=net_arch),
+        "policy_kwargs": policy_kwargs,
     }
 
     if noise_type == "normal":
@@ -414,29 +412,6 @@ def sample_dqn_params(trial: optuna.Trial) -> Dict[str, Any]:
     subsample_steps = trial.suggest_categorical("subsample_steps", [1, 2, 4, 8])
     gradient_steps = max(train_freq // subsample_steps, 1)
 
-    candidate_policy_kwargs = [dict(
-        net_arch=net_arch,
-        features_extractor_kwargs=dict(
-            env_target='gowalla',
-            num_out_channel_feat=num_out_feat,
-            num_out_channel_aoi=num_out_aoi,
-            computation_config=dict(
-                normalize_mu_feat_first=normalize_mu_feat_first,
-                w_mult_y=False,
-                activation_func=act,
-                use_gru=True,
-                use_second_activation_func=use_second_act
-            )
-        )
-    ) for net_arch, num_out_feat, num_out_aoi, normalize_mu_feat_first, act, use_gru, use_second_act in itertools.product(
-        [[64, 64], [256, 256], [128, 128]],
-        [32, 64, 128],
-        [32, 64, 128],
-        [True],  # Normalize mu feat first
-        ['sigmoid', 'tanh', 'relu', 'leaky_relu'],
-        [True],  # use gru
-        [True]  # use second act
-    )]
     policy_kwargs = trial.suggest_categorical('policy_kwargs', candidate_policy_kwargs)
 
     hyperparams = {
