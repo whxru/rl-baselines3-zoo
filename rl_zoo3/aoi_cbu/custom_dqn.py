@@ -25,7 +25,7 @@ env_for_data = HybridCentralizedAoICbuEnv()
 
 
 def greedy_exploration_strategy(obs: np.ndarray, exploration_prob: float):
-    if np.random.random() <= exploration_prob * 2:
+    if np.random.random() <= exploration_prob:
         indices = obs['poi_active'] == 1
         w = obs['weight'][indices]
         AoI = obs['AoI'][indices]
