@@ -184,7 +184,7 @@ def train():
     print("=" * 10, env_id, "=" * 10)
     print(f"Seed: {args.seed}")
     with open('seed_record.log', 'a') as sl:
-        sl.write(f'''{datetime.now().strftime('%y/%m/%d-%H/%M/%S')}: {args.seed}''')
+        sl.write(f'''{datetime.now().strftime('%y/%m/%d-%H/%M/%S')}: {args.seed}\n''')
 
     if args.track:
         try:
