@@ -14,6 +14,7 @@ from stable_baselines3.common.utils import set_random_seed
 import rl_zoo3.import_envs  # noqa: F401 pytype: disable=import-error
 from rl_zoo3.exp_manager import ExperimentManager
 from rl_zoo3.utils import ALGOS, StoreDict
+import datetime
 
 import warnings
 warnings.simplefilter("ignore", UserWarning)
@@ -182,6 +183,8 @@ def train():
 
     print("=" * 10, env_id, "=" * 10)
     print(f"Seed: {args.seed}")
+    with open('seed_record.log', 'a') as sl:
+        sl.write(f'''{datetime.now().strftime('%y/%m/%d-%H/%M/%S')}: {args.seed}''')
 
     if args.track:
         try:
