@@ -14,7 +14,9 @@ class HybridCentralizedAoICbuEnv(gym.Env):
             training_set_split_ratio=0.7,
             manual_set_instance_idx=None,
             instance_pick_type='rr',
+            act_space_type='discrete',
             seed=1997,
+            greedy_supervised_reward=False,
     ):
 
         self.load_config(target)
@@ -33,13 +35,16 @@ class HybridCentralizedAoICbuEnv(gym.Env):
         self.candidate_indices = self.manual_set_instance_idx if self.manual_set_instance_idx is not None else np.arange(self.max_train_inst_idx)
         self.last_selected_inst_idx = 0
 
-        self.action_space = Discrete(self.K)
+        self.action_space_type = act_space_type
+        self.action_space = Box(0, 1, shape=(1, )) if self.action_space_type == 'continuous' else Discrete(self.K)
         self.observation_space = Dict({
             "poi_active": Box(low=0, high=1, shape=(self.N,)),
             "weight": Box(0, 1, (self.N, )),
             "AoI": Box(0, self.T, (self.N, )),
             "t": Box(0, self.T, (1, ))
         })
+
+        self.greedy_supervised_reward = greedy_supervised_reward
 
         self.AoI_record = []
         self.reset_stat_vars()
@@ -90,10 +95,16 @@ class HybridCentralizedAoICbuEnv(gym.Env):
         }
         return res_obs
 
-    def _compute_reward(self):
+    def _compute_reward(self, selected_source=None):
         w = self.current_w[self.active_poi_indices]
         AoI = self.target_AoIs[self.active_poi_indices]
-        return - np.dot(w, AoI)
+        if self.greedy_supervised_reward:
+            o = self.o[:, self.active_poi_indices]
+            AoI_reduction = [np.sum(o[k] * w * AoI * self.p[k]) for k in range(self.K)]
+            greedy_selects = np.argmax(AoI_reduction)
+            return 1 if selected_source == greedy_selects else -1
+        else:
+            return - np.dot(w, AoI)
 
     def reset_stat_vars(self):
         self.t = 0
@@ -110,7 +121,9 @@ class HybridCentralizedAoICbuEnv(gym.Env):
         cur_active_target_AoIs += 1
         self.target_AoIs[self.active_poi_indices] = cur_active_target_AoIs
 
-        selected_source = int(action)
+        selected_source = int(np.floor(action[0] * self.K)) if self.action_space_type == 'continuous' else int(action)
+        if selected_source == self.K:
+            selected_source -= 1
 
         w = self.current_w[self.active_poi_indices]
         w = w
@@ -127,7 +140,7 @@ class HybridCentralizedAoICbuEnv(gym.Env):
             # print(f'Weighted AoI reduced by: {old_aoi_sum - new_aoi_sum}, to: {new_aoi_sum}')
             self.sum_AoI += new_aoi_sum
 
-        reward = self._compute_reward()
+        reward = self._compute_reward(selected_source)
         obs = self._compute_obs()
         done = self.t >= self.T - 1
         info = {}
