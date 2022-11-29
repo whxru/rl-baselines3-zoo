@@ -102,7 +102,7 @@ class HybridCentralizedAoICbuEnv(gym.Env):
             o = self.o[:, self.active_poi_indices]
             AoI_reduction = [np.sum(o[k] * w * AoI * self.p[k]) for k in range(self.K)]
             greedy_selects = np.argmax(AoI_reduction)
-            return 1 if selected_source == greedy_selects else -1
+            return 0 if selected_source == greedy_selects else -1
         else:
             return - np.dot(w, AoI)
 
