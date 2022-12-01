@@ -40,7 +40,7 @@ def train():
         "--eval-freq",
         help="Evaluate the agent every n steps (if negative, no evaluation). "
         "During hyperparameter optimization n-evaluations is used instead",
-        default=25000,
+        default=28800,
         type=int,
     )
     parser.add_argument(
@@ -49,7 +49,7 @@ def train():
         "Disabled if no argument is passed.",
         type=str,
     )
-    parser.add_argument("--eval-episodes", help="Number of episodes to use for evaluation", default=5, type=int)
+    parser.add_argument("--eval-episodes", help="Number of episodes to use for evaluation", default=20, type=int)
     parser.add_argument("--n-eval-envs", help="Number of environments for evaluation", default=1, type=int)
     parser.add_argument("--save-freq", help="Save the model every n steps (if negative, no checkpoint)", default=-1, type=int)
     parser.add_argument(
@@ -64,7 +64,7 @@ def train():
         help="Number of trials for optimizing hyperparameters. "
         "This applies to each optimization runner, not the entire optimization process.",
         type=int,
-        default=500,
+        default=1000,
     )
     parser.add_argument(
         "--max-total-trials",
@@ -79,7 +79,7 @@ def train():
     parser.add_argument(
         "--no-optim-plots", action="store_true", default=False, help="Disable hyperparameter optimization plots"
     )
-    parser.add_argument("--n-jobs", help="Number of parallel jobs when optimizing hyperparameters", type=int, default=1)
+    parser.add_argument("--n-jobs", help="Number of parallel jobs when optimizing hyperparameters", type=int, default=2)
     parser.add_argument(
         "--sampler",
         help="Sampler to use when optimizing hyperparameters",
