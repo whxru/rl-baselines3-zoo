@@ -11,30 +11,39 @@ import json
 import itertools
 
 
-# candidate_policy_kwargs = [dict(
-#         net_arch=net_arch,
-#         features_extractor_kwargs=dict(
-#             env_target='gowalla',
-#             num_out_channel_feat=num_out_feat,
-#             num_out_channel_aoi=num_out_aoi,
-#             computation_config=dict(
-#                 normalize_mu_feat_first=normalize_mu_feat_first,
-#                 w_mult_y=False,
-#                 activation_func=act,
-#                 use_gru=True,
-#                 use_second_activation_func=use_second_act
-#             )
-#         )
-#     ) for net_arch, num_out_feat, num_out_aoi, normalize_mu_feat_first, act, use_gru, use_second_act in itertools.product(
-#         [[64, 64], [256, 256], [128, 128]],
-#         [32, 64, 128],
-#         [32, 64, 128],
-#         [True],  # Normalize mu feat first
-#         ['sigmoid', 'tanh', 'relu', 'leaky_relu'],
-#         [True],  # use gru
-#         [True]  # use second act
-#    )]
 candidate_policy_kwargs = [dict(
+        net_arch=net_arch,
+        features_extractor_kwargs=dict(
+            env_target='gowalla',
+            num_out_channel_feat=num_out_feat,
+            num_out_channel_aoi=num_out_aoi,
+            computation_config=dict(
+                normalize_mu_feat_first=normalize_mu_feat_first,
+                w_mult_y=False,
+                activation_func=act,
+                use_gru=True,
+                use_second_activation_func=use_second_act
+            )
+        )
+    ) for net_arch, num_out_feat, num_out_aoi, normalize_mu_feat_first, act, use_gru, use_second_act in itertools.product(
+        [[64, 64], [256, 256], [128, 128]],
+        [32, 64, 128],
+        [32, 64, 128],
+        [True],  # Normalize mu feat first
+        ['sigmoid', 'tanh', 'relu', 'leaky_relu'],
+        [True],  # use gru
+        [True]  # use second act
+   )]
+
+
+def sample_ppo_simp_params(trial: optuna.Trial) -> Dict[str, Any]:
+    """
+    Sampler for PPO hyperparams.
+
+    :param trial:
+    :return:
+    """
+    candidate_policy_kwargs = [dict(
         net_arch=net_arch,
         features_extractor_kwargs=dict(
             env_target='gowalla',
@@ -46,6 +55,58 @@ candidate_policy_kwargs = [dict(
         [[64, 64], [256, 256], [128, 128]],
         ['sigmoid', 'tanh', 'relu', 'leaky_relu'],
     )]
+
+    batch_size = trial.suggest_categorical("batch_size", [16, 32, 64, 128, 256, 512, 1024, 2048])
+    # batch_size = trial.suggest_categorical("batch_size", [64, 256, 512, 1024, 4096, 6144, 8192])
+    # n_steps = trial.suggest_categorical("n_steps", [64, 256, 512, 1024, 4096, 6144, 8192, 10240, 14336])
+    n_steps = trial.suggest_categorical("n_steps", [16, 32, 64, 128, 256, 512, 1024, 2048])
+    # batch_size = trial.suggest_categorical("batch_size", [64])
+    # n_steps = trial.suggest_categorical("n_steps", [512])
+    gamma = trial.suggest_categorical("gamma", [0.9, 0.95, 0.98, 0.99, 0.995, 0.999, 0.9999])
+    learning_rate = trial.suggest_loguniform("learning_rate", 1e-5, 1)
+    lr_schedule = "constant"
+    # Uncomment to enable learning rate schedule
+    # lr_schedule = trial.suggest_categorical('lr_schedule', ['linear', 'constant'])
+    ent_coef = trial.suggest_loguniform("ent_coef", 0.00000001, 0.1)
+    clip_range = trial.suggest_categorical("clip_range", [0.1, 0.2, 0.3, 0.4])
+    n_epochs = trial.suggest_categorical("n_epochs", [1, 5, 10, 20])
+    gae_lambda = trial.suggest_categorical("gae_lambda", [0.8, 0.9, 0.92, 0.95, 0.98, 0.99, 1.0])
+    max_grad_norm = trial.suggest_categorical("max_grad_norm", [0.3, 0.5, 0.6, 0.7, 0.8, 0.9, 1, 2, 5])
+    vf_coef = trial.suggest_uniform("vf_coef", 0, 1)
+    # Uncomment for gSDE (continuous actions)
+    # log_std_init = trial.suggest_uniform("log_std_init", -4, 1)
+    # Uncomment for gSDE (continuous action)
+    # sde_sample_freq = trial.suggest_categorical("sde_sample_freq", [-1, 8, 16, 32, 64, 128, 256])
+    # Orthogonal initialization
+    # ortho_init = False
+    # ortho_init = trial.suggest_categorical('ortho_init', [False, True])
+    # activation_fn = trial.suggest_categorical('activation_fn', ['tanh', 'relu', 'elu', 'leaky_relu'])
+
+    # TODO: account when using multiple envs
+    if batch_size > n_steps:
+        batch_size = n_steps
+
+    if lr_schedule == "linear":
+        learning_rate = linear_schedule(learning_rate)
+
+    # Independent networks usually work best
+    # when not working with images
+
+    policy_kwargs = trial.suggest_categorical('policy_kwargs', candidate_policy_kwargs)
+    return {
+        "n_steps": n_steps,
+        "batch_size": batch_size,
+        "gamma": gamma,
+        "learning_rate": learning_rate,
+        "ent_coef": ent_coef,
+        "clip_range": clip_range,
+        "n_epochs": n_epochs,
+        "gae_lambda": gae_lambda,
+        "max_grad_norm": max_grad_norm,
+        "vf_coef": vf_coef,
+        "policy_kwargs": policy_kwargs
+        # "sde_sample_freq": sde_sample_freq,
+    }
 
 
 def sample_ppo_params(trial: optuna.Trial) -> Dict[str, Any]:
@@ -547,6 +608,7 @@ HYPERPARAMS_SAMPLER = {
     "sac": sample_sac_params,
     "tqc": sample_tqc_params,
     "ppo": sample_ppo_params,
+    "ppo-simp": sample_ppo_simp_params,
     "td3": sample_td3_params,
     "trpo": sample_trpo_params,
 }

@@ -1,0 +1,6 @@
+gowalla-v1:
+  n_envs: 5
+  n_steps: 10240
+  n_timesteps: !!float 4032e5
+  policy: rl_zoo3.aoi_cbu.custom_multi_input.CustomMultiInputPolicy
+  normalize: "dict(norm_obs_keys=['weight', 'AoI'])"

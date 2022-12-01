@@ -27,6 +27,7 @@ ALGOS = {
     "dqn": CustomDQN,
     # "dqn": DQN,
     "ppo": PPO,
+    "ppo-simp": PPO,
     "sac": SAC,
     "td3": TD3,
     # SB3 Contrib,
