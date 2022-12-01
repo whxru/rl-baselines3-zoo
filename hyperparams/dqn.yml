@@ -17,7 +17,7 @@ gowalla-v1:
             )
         )
     )"
-  normalize: True
+  normalize: "dict(norm_obs_keys=['weight', 'AoI'])"
 atari:
   env_wrapper:
     - stable_baselines3.common.atari_wrappers.AtariWrapper
