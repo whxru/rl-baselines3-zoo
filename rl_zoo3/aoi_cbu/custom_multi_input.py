@@ -33,7 +33,7 @@ from stable_baselines3.common.utils import get_device, is_vectorized_observation
 from stable_baselines3.common.policies import ActorCriticPolicy
 from stable_baselines3.dqn.policies import DQNPolicy
 from stable_baselines3.td3 import MultiInputPolicy as MultiInputDDPGPolicy
-from rl_zoo3.aoi_cbu.feature_extractor import DynamicPoIFeatureExtractor
+from rl_zoo3.aoi_cbu.feature_extractor import DynamicPoIFeatureExtractor, SimplifiedWeightedAoIFeatureExtractor
 
 
 class CustomMultiInputPolicy(ActorCriticPolicy):
@@ -103,7 +103,7 @@ class CustomMultiInputPolicy(ActorCriticPolicy):
             sde_net_arch,
             use_expln,
             squash_output,
-            DynamicPoIFeatureExtractor,
+            SimplifiedWeightedAoIFeatureExtractor,
             features_extractor_kwargs,
             normalize_images,
             optimizer_class,
