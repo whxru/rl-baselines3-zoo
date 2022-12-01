@@ -43,12 +43,12 @@ def sample_ppo_params(trial: optuna.Trial) -> Dict[str, Any]:
     :param trial:
     :return:
     """
-    # batch_size = trial.suggest_categorical("batch_size", [16, 32, 64, 128, 256, 512, 1024, 2048])
+    batch_size = trial.suggest_categorical("batch_size", [16, 32, 64, 128, 256, 512, 1024, 2048])
     # batch_size = trial.suggest_categorical("batch_size", [64, 256, 512, 1024, 4096, 6144, 8192])
     # n_steps = trial.suggest_categorical("n_steps", [64, 256, 512, 1024, 4096, 6144, 8192, 10240, 14336])
-    # n_steps = trial.suggest_categorical("n_steps", [16, 32, 64, 128, 256, 512, 1024, 2048])
-    batch_size = trial.suggest_categorical("batch_size", [64])
-    n_steps = trial.suggest_categorical("n_steps", [512])
+    n_steps = trial.suggest_categorical("n_steps", [16, 32, 64, 128, 256, 512, 1024, 2048])
+    # batch_size = trial.suggest_categorical("batch_size", [64])
+    # n_steps = trial.suggest_categorical("n_steps", [512])
     gamma = trial.suggest_categorical("gamma", [0.9, 0.95, 0.98, 0.99, 0.995, 0.999, 0.9999])
     learning_rate = trial.suggest_loguniform("learning_rate", 1e-5, 1)
     lr_schedule = "constant"
@@ -65,7 +65,7 @@ def sample_ppo_params(trial: optuna.Trial) -> Dict[str, Any]:
     # Uncomment for gSDE (continuous action)
     # sde_sample_freq = trial.suggest_categorical("sde_sample_freq", [-1, 8, 16, 32, 64, 128, 256])
     # Orthogonal initialization
-    ortho_init = False
+    # ortho_init = False
     # ortho_init = trial.suggest_categorical('ortho_init', [False, True])
     # activation_fn = trial.suggest_categorical('activation_fn', ['tanh', 'relu', 'elu', 'leaky_relu'])
 
