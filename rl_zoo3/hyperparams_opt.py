@@ -30,7 +30,7 @@ candidate_policy_kwargs = [dict(
         [32, 64, 128],
         [32, 64, 128],
         [True],  # Normalize mu feat first
-        ['tanh'],
+        ['tanh', 'leaky_relu', 'rrelu', 'relu6'],
         [True],  # use gru
         [True]  # use second act
    )]
@@ -45,6 +45,7 @@ def sample_ppo_simp_params(trial: optuna.Trial) -> Dict[str, Any]:
     """
     candidate_policy_kwargs = [dict(
         net_arch=net_arch,
+        features_extractor_class='simp',
         features_extractor_kwargs=dict(
             env_target='gowalla',
             linear_dims=linear_dims,
@@ -53,7 +54,7 @@ def sample_ppo_simp_params(trial: optuna.Trial) -> Dict[str, Any]:
     ) for net_arch, linear_dims, act in itertools.product(
         [[64, 64], [256, 256], [128, 128]],
         [[64, 64], [256, 256], [128, 128]],
-        ['sigmoid', 'tanh', 'relu', 'leaky_relu'],
+        ['tanh', 'leaky_relu', 'rrelu', 'relu6'],
     )]
 
     batch_size = trial.suggest_categorical("batch_size", [16, 32, 64, 128, 256, 512, 1024, 2048])

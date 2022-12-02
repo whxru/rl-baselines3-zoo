@@ -3,4 +3,8 @@ gowalla-v1:
   n_steps: 10240
   n_timesteps: !!float 4032e5
   policy: rl_zoo3.aoi_cbu.custom_multi_input.CustomMultiInputPolicy
+  policy_kwargs: "dict(
+      features_extractor_class='simp',
+      features_extractor_kwargs=dict()
+  )"
   normalize: "dict(norm_obs_keys=['weight', 'AoI'])"
