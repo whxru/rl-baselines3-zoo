@@ -16,6 +16,7 @@ gowalla-v1:
   vf_coef: 0.20907559665877726
   policy_kwargs: "dict(
         net_arch=[256, 256],
+        features_extractor_class='simp',
         features_extractor_kwargs=dict(
             num_out_channel_feat=64,
             num_out_channel_aoi=32,
