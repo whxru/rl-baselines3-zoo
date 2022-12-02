@@ -1,6 +1,23 @@
 gowalla-v1:
+  # seed: 19972022
+  n_timesteps: 28800000
+  n_steps: 1024
+  gamma: 0.9
+  learning_rate: 0.0011390278571989868
+  ent_coef: 0.04473900938204765
+  clip_range: 0.1
+  n_epochs: 5
+  gae_lambda: 0.99
+  max_grad_norm: 0.6
+  vf_coef: 0.14176798291580622
   n_envs: 5
-  n_steps: 10240
-  n_timesteps: !!float 4032e5
   policy: rl_zoo3.aoi_cbu.custom_multi_input.CustomMultiInputPolicy
+  policy_kwargs: "dict(
+      net_arch=[64, 64],
+      features_extractor_class='simp',
+      features_extractor_kwargs=dict(
+          linear_dims=[256, 256],
+          act_func='leaky_relu'
+      )
+  )"
   normalize: "dict(norm_obs_keys=['weight', 'AoI'])"
