@@ -103,7 +103,7 @@ class CustomMultiInputPolicy(ActorCriticPolicy):
             sde_net_arch,
             use_expln,
             squash_output,
-            SimplifiedWeightedAoIFeatureExtractor,
+            DynamicPoIFeatureExtractor,
             features_extractor_kwargs,
             normalize_images,
             optimizer_class,
