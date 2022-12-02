@@ -1,4 +1,5 @@
 # soft_wanted seed: 3312056093
+# Trial 23 finished with value: -1760348.0 and parameters: {'batch_size': 16, 'n_steps': 256, 'gamma': 0.99, 'learning_rate': 0.0003094991569606092, 'ent_coef': 0.025211305195537544, 'clip_range': 0.3, 'n_epochs': 10, 'gae_lambda': 0.92, 'max_grad_norm': 5, 'vf_coef': 0.20907559665877726, 'policy_kwargs': {'net_arch': [256, 256], 'features_extractor_kwargs': {'env_target': 'gowalla', 'num_out_channel_feat': 64, 'num_out_channel_aoi': 32, 'computation_config': {'normalize_mu_feat_first': True, 'w_mult_y': False, 'activation_func': 'tanh', 'use_gru': True, 'use_second_activation_func': True}}}}. Best is trial 23 with value: -1760348.0.
 gowalla-v1:
   n_envs: 5
   policy: rl_zoo3.aoi_cbu.custom_multi_input.CustomMultiInputPolicy
@@ -17,7 +18,7 @@ gowalla-v1:
   policy_kwargs: "dict(
         net_arch=[256, 256],
         features_extractor_class='dyna',
-        features_extractor_kwargs=dict(
+        features_extractor_kwargs=dict( 
             num_out_channel_feat=64,
             num_out_channel_aoi=32,
             computation_config=dict(
