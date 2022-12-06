@@ -49,7 +49,7 @@ class HybridCentralizedAoICbuEnv(gym.Env):
         self.AoI_record = []
         self.reset_stat_vars()
 
-        np.random.seed(seed)
+        # np.random.seed(seed)
 
     def load_config(self, target):
 
