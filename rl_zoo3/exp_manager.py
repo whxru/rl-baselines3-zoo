@@ -230,6 +230,7 @@ class ExperimentManager:
             )
 
         try:
+            set_random_seed(self.seed)
             model.learn(self.n_timesteps, **kwargs)
         except KeyboardInterrupt:
             # this allows to save the model when interrupting training
@@ -717,7 +718,7 @@ class ExperimentManager:
             env=env,
             tensorboard_log=None,
             # We do not seed the trial
-            seed=None,
+            seed=self.seed,
             verbose=trial_verbosity,
             device=self.device,
             **kwargs,
