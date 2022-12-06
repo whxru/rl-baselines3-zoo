@@ -7,6 +7,7 @@ from threading import Thread
 from typing import Optional
 
 import optuna
+import numpy as np
 from sb3_contrib import TQC
 from stable_baselines3 import SAC
 from stable_baselines3.common.callbacks import BaseCallback, EvalCallback
@@ -46,7 +47,13 @@ class TrialEvalCallback(EvalCallback):
 
     def _on_step(self) -> bool:
         if self.eval_freq > 0 and self.n_calls % self.eval_freq == 0:
-            super()._on_step()
+            # super()._on_step()
+            self.last_mean_reward = 0
+            aoi_records = self.training_env.get_attr('AoI_record')
+            num_record_each_env = self.n_eval_episodes // len(aoi_records)
+            for aoi_record in aoi_records:
+                self.last_mean_reward -= np.sum(aoi_record[- num_record_each_env:])
+            self.last_mean_reward /= num_record_each_env * len(aoi_records)
             self.eval_idx += 1
             # report best or report current ?
             # report num_timesteps or elasped time ?
