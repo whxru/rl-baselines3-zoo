@@ -48,6 +48,7 @@ import rl_zoo3.import_envs  # noqa: F401 pytype: disable=import-error
 from rl_zoo3.callbacks import SaveVecNormalizeCallback, TrialEvalCallback
 from rl_zoo3.hyperparams_opt import HYPERPARAMS_SAMPLER
 from rl_zoo3.utils import ALGOS, get_callback_list, get_class_by_name, get_latest_run_id, get_wrapper_class, linear_schedule
+from rl_zoo3.aoi_cbu.custom_eval_callback import CustomEvalCallback
 
 
 class ExperimentManager:
@@ -470,6 +471,7 @@ class ExperimentManager:
                     save_freq=self.save_freq,
                     save_path=self.save_path,
                     name_prefix="rl_model",
+                    save_vecnormalize=True,
                     verbose=1,
                 )
             )
@@ -483,16 +485,16 @@ class ExperimentManager:
                 print("Creating test environment")
 
             save_vec_normalize = SaveVecNormalizeCallback(save_freq=1, save_path=self.params_path)
-            eval_callback = EvalCallback(
-                self.create_envs(self.n_eval_envs, eval_env=True),
-                callback_on_new_best=save_vec_normalize,
-                best_model_save_path=self.save_path,
-                n_eval_episodes=self.n_eval_episodes,
-                log_path=self.save_path,
-                eval_freq=self.eval_freq,
-                deterministic=self.deterministic_eval,
-            )
-
+            # eval_callback = EvalCallback(
+            #     self.create_envs(self.n_eval_envs, eval_env=True),
+            #     callback_on_new_best=save_vec_normalize,
+            #     best_model_save_path=self.save_path,
+            #     n_eval_episodes=self.n_eval_episodes,
+            #     log_path=self.save_path,
+            #     eval_freq=self.eval_freq,
+            #     deterministic=self.deterministic_eval,
+            # )
+            eval_callback = CustomEvalCallback(self.eval_freq)
             self.callbacks.append(eval_callback)
 
     @staticmethod

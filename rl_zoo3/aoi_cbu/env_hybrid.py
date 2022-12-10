@@ -15,7 +15,7 @@ class HybridCentralizedAoICbuEnv(gym.Env):
             manual_set_instance_idx=None,
             instance_pick_type='rr',
             act_space_type='discrete',
-            seed=1997,
+            seed=12071256,
             greedy_supervised_reward=False,
     ):
 
@@ -47,6 +47,7 @@ class HybridCentralizedAoICbuEnv(gym.Env):
         self.greedy_supervised_reward = greedy_supervised_reward
 
         self.AoI_record = []
+        self.rs = np.random.RandomState(seed=seed) if seed > 0 else np.random
         self.reset_stat_vars()
 
         # np.random.seed(seed)
@@ -129,8 +130,8 @@ class HybridCentralizedAoICbuEnv(gym.Env):
         w = w
         old_aoi_sum = np.dot(w, self.target_AoIs[self.active_poi_indices])
 
-        if np.random.random() <= self.p[selected_source]:
-            self.target_AoIs[np.random.random(self.N) < self.o[selected_source]] = 1
+        if self.rs.random() <= self.p[selected_source]:
+            self.target_AoIs[self.rs.random(self.N) < self.o[selected_source]] = 1
 
         if len(self.active_poi_indices) > 0:
             aoi = self.target_AoIs[self.active_poi_indices]

@@ -79,7 +79,7 @@ def train():
     parser.add_argument(
         "--no-optim-plots", action="store_true", default=False, help="Disable hyperparameter optimization plots"
     )
-    parser.add_argument("--n-jobs", help="Number of parallel jobs when optimizing hyperparameters", type=int, default=2)
+    parser.add_argument("--n-jobs", help="Number of parallel jobs when optimizing hyperparameters", type=int, default=1)
     parser.add_argument(
         "--sampler",
         help="Sampler to use when optimizing hyperparameters",
