@@ -1,30 +1,30 @@
 # soft_wanted seed: 1716027652
-# Trial 19 finished with value: -1003.9889583333334 and parameters: {'n_steps': 1024, 'batch_size': 512, 'gamma': 0.95, 'learning_rate': 0.0002898306480277343, 'ent_coef': 4.903523396723672e-07, 'clip_range': 0.3, 'n_epochs': 10, 'gae_lambda': 0.99, 'max_grad_norm': 0.9, 'vf_coef': 0.2734203620078177, 'policy_kwargs': {'net_arch': [64, 64], 'features_extractor_kwargs': {'env_target': 'gowalla', 'num_out_channel_feat': 32, 'num_out_channel_aoi': 64, 'computation_config': {'normalize_mu_feat_first': True, 'w_mult_y': False, 'activation_func': 'rrelu', 'use_gru': True, 'use_second_activation_func': True}}}}. Best is trial 19 with value: -1003.9889583333334.
+#   - Trial 13 finished with value: -941.9931597222223 and parameters: {'n_steps': 512, 'batch_size': 512, 'gamma': 0.95, 'learning_rate': 0.0007151288625424127, 'ent_coef': 1.917305430103157e-07, 'clip_range': 0.1, 'n_epochs': 5, 'gae_lambda': 0.9, 'max_grad_norm': 0.3, 'vf_coef': 0.13252172983281899, 'policy_kwargs': {'net_arch': [256, 256], 'features_extractor_kwargs': {'env_target': 'gowalla', 'num_out_channel_feat': 128, 'num_out_channel_aoi': 64, 'computation_config': {'normalize_mu_feat_first': True, 'w_mult_y': False, 'activation_func': 'relu6', 'use_gru': True, 'use_second_activation_func': True}}}}. Best is trial 13 with value: -941.9931597222223.
 gowalla-v1:
   n_envs: 1
   policy: rl_zoo3.aoi_cbu.custom_multi_input.CustomMultiInputPolicy
   normalize: "dict(norm_obs_keys=['weight', 'AoI'])"
   n_timesteps: 28800000
   batch_size: 512
-  n_steps: 1024
+  n_steps: 512
   gamma: 0.95
-  learning_rate: 0.0002898306480277343
-  ent_coef: 4.903523396723672e-07
-  clip_range: 0.3
-  n_epochs: 10
-  gae_lambda: 0.99
-  max_grad_norm: 0.9
-  vf_coef: 0.2734203620078177
+  learning_rate: 0.0007151288625424127
+  ent_coef: 1.917305430103157e-07
+  clip_range: 0.1
+  n_epochs: 5
+  gae_lambda: 0.9
+  max_grad_norm: 0.3
+  vf_coef: 0.13252172983281899
   policy_kwargs: "dict(
-        net_arch=[64, 64],
+        net_arch=[256, 256],
         features_extractor_class='dyna',
         features_extractor_kwargs=dict( 
-            num_out_channel_feat=32,
+            num_out_channel_feat=128,
             num_out_channel_aoi=64,
             computation_config=dict(
                 normalize_mu_feat_first=True,
                 w_mult_y=False,
-                activation_func='rrelu',
+                activation_func='relu6',
                 use_gru=True,
                 use_second_activation_func=True,
             )
