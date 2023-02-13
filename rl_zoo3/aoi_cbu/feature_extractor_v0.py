@@ -1,11 +1,9 @@
-# Version 1: adapt KKT analysis of SRS policy
-
 import gym
 import numpy as np
 import torch
 import pandas as pd
 from torch.nn.parameter import Parameter
-from torch.nn import init, GRU, Sequential, Linear
+from torch.nn import init, GRU
 # from torch.multiprocessing import Pool, set_start_method
 import torch.nn.functional as F
 
@@ -15,7 +13,6 @@ from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 from stable_baselines3 import DQN, PPO
 from stable_baselines3.common.callbacks import CheckpointCallback
 from stable_baselines3.common.env_util import make_vec_env
-
 
 try:
     from env.env_hybrid import HybridCentralizedAoICbuEnv
@@ -31,37 +28,31 @@ class DynamicPoIFeatureExtractor(BaseFeaturesExtractor):
             num_out_channel_feat=4,
             num_out_channel_aoi=4,
             computation_config={},
-            net_dim=[1024, 512],
     ):
+        self.num_out_channels = num_out_channel_feat + num_out_channel_aoi
         env = HybridCentralizedAoICbuEnv(target=env_target)
         self.beta = torch.tensor(env.beta, dtype=torch.int)
-        self.n_parent = torch.sum(self.beta, dim=0)
         self.p = torch.tensor(env.p, dtype=torch.float32)
         self.o = torch.tensor(env.o, dtype=torch.float32)
         self.K = self.beta.shape[0]
         self.N = self.beta.shape[1]
-        super(DynamicPoIFeatureExtractor, self).__init__(observation_space, features_dim=net_dim[-1])
+        super(DynamicPoIFeatureExtractor, self).__init__(observation_space, features_dim=self.K * self.num_out_channels)
 
         self.device = None
         self.computation_config = computation_config
 
-        self.gru_w = GRU(self.K * self.K, self.K * self.K)
-        self.grw_w_2 = GRU(self.K * self.K, self.K * self.K)
+        self.num_out_channel_feat = num_out_channel_feat
+        self.num_out_channel_aoi = num_out_channel_aoi
 
-        activation_func = torch.nn.Sigmoid if 'activation_func' not in self.computation_config else {
-            'relu': torch.nn.ReLU,
-            'relu6': torch.nn.ReLU6,
-            'sigmoid': torch.nn.Sigmoid,
-            'leaky_relu': torch.nn.Sigmoid,
-            'rrelu': torch.nn.RReLU,
-            'tanh': torch.nn.Tanh
-        }[self.computation_config['activation_func']]
-        modules = []
-        net_dim = [self.K * self.K * 4] + net_dim
-        for i in range(1, len(net_dim)):
-            modules.append(Linear(net_dim[i-1], net_dim[i]))
-            modules.append(activation_func())
-        self.seq = Sequential(*modules)
+        # self.p = self.p.reshape((self.K, 1)).expand((-1, num_out_channel_feat))
+        self.beta = self.beta
+        self.o = self.o
+        self.gru = GRU(self.K * num_out_channel_feat, self.K * num_out_channel_feat)
+
+        self.mu_feat = Parameter(torch.empty((self.K, num_out_channel_feat)))
+        self.mu_aoi = Parameter(torch.empty((self.K, num_out_channel_aoi)))
+        init.kaiming_uniform(self.mu_feat)
+        init.kaiming_uniform(self.mu_aoi)
 
     def expand_to_out_channels(self, x, num=None):
         if num is None:
@@ -76,26 +67,51 @@ class DynamicPoIFeatureExtractor(BaseFeaturesExtractor):
             self.p = self.p.to(self.device)
             self.o = self.o.to(self.device)
             self.beta = self.beta.to(self.device)
-            self.n_parent = self.n_parent.to(self.device)
 
         indices = torch.argwhere(observation['poi_active'] == 1).squeeze_()
         if indices.ndim == 0:
-            return self.seq(torch.zeros(self.K * self.K * 4).to(self.device))
+            kkt_feat = torch.flatten(self.mu_feat * torch.zeros(self.mu_feat.shape).to(self.device))
+            kkt_aoi = torch.flatten(self.mu_aoi * torch.zeros(self.mu_aoi.shape).to(self.device))
+            return torch.cat((kkt_feat, kkt_aoi))
         w = observation['weight'][indices]  # feature of PoIs
         AoI = observation['AoI'][indices]  # feature of PoIs
-        beta = self.beta[:, indices].to(dtype=torch.float)
-        beta_o = self.beta[:, indices] * self.o[:, indices]
-        p = torch.squeeze(torch.mm(torch.t(beta_o), torch.reshape(self.p, (self.K, 1))))  # p for each PoI, (N(t), 1)
-        n_parent = self.n_parent[indices]
-        w_AoI_p = w * AoI / p
+        beta = self.beta[:, indices] * self.o[:, indices]
+        activation_func = F.sigmoid if 'activation_func' not in self.computation_config else {
+            'relu': F.relu,
+            'relu6': F.relu6,
+            'sigmoid': F.sigmoid,
+            'leaky_relu': F.leaky_relu,
+            'rrelu': F.rrelu,
+            'tanh': F.tanh
+        }[self.computation_config['activation_func']]
 
-        overlapped_w = torch.mm(beta, torch.mm(self.expand_to_out_channels(w, len(indices)), torch.t(beta)))
-        gru_out_1 = torch.squeeze(self.gru_w(torch.reshape(torch.flatten(overlapped_w), (1, 1, self.K * self.K)))[0])
-        overlapped_w_2 = torch.mm(beta, torch.mm(self.expand_to_out_channels(w * n_parent, len(indices)), torch.t(beta)))
-        gru_out_2 = torch.squeeze(self.grw_w_2(torch.reshape(torch.flatten(overlapped_w_2), (1, 1, self.K * self.K)))[0])
-        wAoI_out_1 = torch.flatten(torch.mm(beta, torch.mm(self.expand_to_out_channels(w_AoI_p, len(indices)), torch.t(beta))))
-        wAoI_out_2 = torch.flatten(torch.mm(beta, torch.mm(self.expand_to_out_channels(w_AoI_p * n_parent, len(indices)), torch.t(beta))))
-        return self.seq(torch.cat((gru_out_1, gru_out_2, wAoI_out_1, wAoI_out_2)))
+        w_expand = self.expand_to_out_channels(w)
+
+        mu_feat = self.mu_feat if 'normalize_mu_feat_first' not in self.computation_config or not \
+        self.computation_config['normalize_mu_feat_first'] else F.softmax(self.mu_feat)
+
+        y = torch.mm(torch.t(beta), mu_feat * self.p)
+        y = activation_func(y)
+        kkt_feat = None
+        if 'w_mult_y' in self.computation_config and self.computation_config['w_mult_y']:
+            kkt_feat = torch.mm(beta, w_expand * y)
+        else:
+            kkt_feat = torch.mm(beta, w_expand / y)
+
+        if 'use_second_activation_func' in self.computation_config and self.computation_config[
+            'use_second_activation_func']:
+            kkt_feat = activation_func(kkt_feat)
+        if 'use_gru' in self.computation_config and self.computation_config['use_gru']:
+            kkt_feat, hidden_w = self.gru(
+                torch.reshape(torch.flatten(kkt_feat), (1, 1, self.K * self.num_out_channel_feat))
+            )
+            kkt_feat = torch.squeeze(kkt_feat)
+        else:
+            kkt_feat = torch.flatten(kkt_feat)
+        kkt_aoi = torch.mm(beta, self.expand_to_out_channels(w * AoI, self.num_out_channel_aoi)) * self.mu_aoi
+        kkt_aoi = activation_func(kkt_aoi)
+        kkt_aoi = torch.flatten(kkt_aoi)
+        return torch.squeeze(torch.cat((kkt_feat, kkt_aoi))).to(self.device)
 
     def forward(self, observations: torch.Tensor) -> torch.Tensor:
         seq_len = observations['AoI'].shape[0]

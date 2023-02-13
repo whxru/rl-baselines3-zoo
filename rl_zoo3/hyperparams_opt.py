@@ -15,24 +15,15 @@ candidate_policy_kwargs = [dict(
         net_arch=net_arch,
         features_extractor_kwargs=dict(
             env_target='gowalla',
-            num_out_channel_feat=num_out_feat,
-            num_out_channel_aoi=num_out_aoi,
             computation_config=dict(
-                normalize_mu_feat_first=normalize_mu_feat_first,
-                w_mult_y=False,
                 activation_func=act,
-                use_gru=True,
-                use_second_activation_func=use_second_act
+                net_dim=net_dim,
             )
         )
-    ) for net_arch, num_out_feat, num_out_aoi, normalize_mu_feat_first, act, use_gru, use_second_act in itertools.product(
+    ) for net_arch, act, net_dim in itertools.product(
         [[64, 64], [256, 256], [128, 128]],
-        [32, 64, 128],
-        [32, 64, 128],
-        [True],  # Normalize mu feat first
         ['tanh', 'leaky_relu', 'rrelu', 'relu6'],
-        [True],  # use gru
-        [True]  # use second act
+        [[1024, 512], [1024, 256], [512, 256], [512, 128], [256, 128], [256, 64], [128, 128], [128, 64], [64, 64]]  # use second act
    )]
 
 
