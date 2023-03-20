@@ -131,10 +131,14 @@ class AoIUavTrajectoryPlanningEnv(gym.Env):
             else:
                 self.actual_h[k] += 1
 
+        self.t += 1
         obs = self._compute_obs()
         reward = np.dot(self.w, self.expect_h)
         done = self.t >= self.T
         info = None
+
+        if done:
+            self.AoI_record.append(np.dot(self.w, self.expect_sum_h) / self.T)
 
         return obs, reward, done, info
 
@@ -149,5 +153,12 @@ class AoIUavTrajectoryPlanningEnv(gym.Env):
 
 if __name__ == '__main__':
     env = AoIUavTrajectoryPlanningEnv()
-    env.display_p_func()
+    env.reset()
+    done = False
+    while not done:
+        action = env.action_space.sample()
+        obs, reward, done, info = env.step(action)
+        # print(reward)
+    print(env.AoI_record)
+    # env.display_p_func()
 
