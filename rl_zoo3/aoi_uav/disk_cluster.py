@@ -45,7 +45,7 @@ def disk_coverage_cluster(qk, r):  # returns [the cluster id assigned to each Po
     return res_cluster_assigned, res_cluster_centers
 
 
-def test_cluster_func():
+def plot_clusters():
     t0 = time.time()
     qk = np.random.random((50, 3)) * 100
     qk[:, -1] = np.zeros(50)
@@ -64,4 +64,4 @@ def test_cluster_func():
 
 
 if __name__ == '__main__':
-    test_cluster_func()
+    plot_clusters()
