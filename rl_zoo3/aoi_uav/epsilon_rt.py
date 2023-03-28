@@ -54,30 +54,18 @@ class EpsilonRT:
         self.Vu, self.Eu = self.build_uDTG(self.epsilon)
         self.p = EpsilonRT.metropolis_hastings(self.Vu, self.Eu)
 
-    def original_t_mix_bound(self, epsilon):
-        Vu, Eu = self.build_uDTG(epsilon)
-        K = len(Vu)
-        p = EpsilonRT.metropolis_hastings(Vu, Eu)
-        pi_min = np.min([v.pi for v in Vu])
-        subdominant_eigen_modulus = 0
-        eigenvals = np.linalg.eigvals(p)
-        for eigenval in eigenvals:
-            if abs(abs(eigenval) - 1) >= 1e-10:
-                subdominant_eigen_modulus = max(subdominant_eigen_modulus, abs(eigenval))
-        return np.log(4 / pi_min) / (1 - subdominant_eigen_modulus)
-
     def build_uDTG(self, epsilon):
         Vu = []
         Eu = []
-        one_minus_epsilon_mag_E_pos = 1 - epsilon * len([1 for v1, v2 in self.E if np.linalg.norm(v1.q - v2.q) > self.lamb_xoy])
+        one_minus_epsilon_mag_E_pos = 1 - epsilon * len(self.E_positive)
         for v in self.V:
-            v.pi = one_minus_epsilon_mag_E_pos * np.sqrt(v.w) / np.sum([np.sqrt(v.w) for v in self.V])
+            v.pi = one_minus_epsilon_mag_E_pos * np.sqrt(v.w) / self.sum_sqrt_w
             Vu.append(Vertex(is_virtual=False, index=v.k, q=v.q))
 
         for v1, v2 in self.E:
             v1 = Vu[v1.k]
             v2 = Vu[v2.k]
-            d = math.ceil(np.linalg.norm(v1.q - v2.q) / self.lamb_xoy) - 1
+            d = self.d[v1.k, v2.k]
             if d == -1:
                 continue
             elif d == 0:
@@ -85,8 +73,9 @@ class EpsilonRT:
                 v1.connect_to(v2)
             else:  # d >= 1
                 delta_q = (v2.q - v1.q) / (1 + d)
+                pi_v = epsilon / d
                 for n in range(1, 1 + d):
-                    v_intermediate = Vertex(pi=epsilon/d, is_virtual=True, index=len(Vu), q=v1.q+n*delta_q)
+                    v_intermediate = Vertex(pi=pi_v, is_virtual=True, index=len(Vu), q=v1.q+n*delta_q)
                     v_last = Vu[-1]
                     Vu.append(v_intermediate)
                     if n == 1:
@@ -105,19 +94,19 @@ class EpsilonRT:
         self.E_one = []
         self.E_two = []
         self.d_max = -2
+        self.d = np.zeros((len(self.V), len(self.V))).astype(int)
         for v1, v2 in self.E:
-            d = math.ceil(np.linalg.norm(v1.q - v2.q) / self.lamb_xoy) - 1
+            d = np.ceil(np.linalg.norm(v1.q - v2.q) / self.lamb_xoy) - 1
+            print(f'Node {v1.k} and {v2.k}: distance = {np.linalg.norm(v1.q - v2.q)} / position {v1.q} and {v2.q}')
+            self.d[v1.k, v2.k] = d
+            self.d[v2.k, v1.k] = d
             self.d_max = max(self.d_max, d)
             if d == 1:
                 self.E_one.append((v1, v2))
-                self.E_one.append((v2, v1))
                 self.E_positive.append((v1, v2))
-                self.E_positive.append((v2, v1))
             elif d > 1:
                 self.E_two.append((v1, v2))
-                self.E_two.append((v2, v1))
                 self.E_positive.append((v1, v2))
-                self.E_positive.append((v2, v1))
         self.sum_sqrt_w = np.sum([np.sqrt(v.w) for v in self.V])
         if self.epsilon is None:
             self._pick_epsilon()
@@ -205,6 +194,47 @@ class EpsilonRT:
         return x, step_count
 
     @staticmethod
+    def filter_edges(w, qk, x0=0):
+        visited_nodes = [x0]
+        x_last = x0
+        K = len(w)
+        k_large_w = heapq.nlargest(K // 10, range(K), key=lambda k: w[k])
+
+        visited_seq = {k: 0 for k in k_large_w}
+        E = []
+        while len(visited_nodes) < K:
+            d_min = np.inf
+            nearest_node = None
+            for k in range(K):
+                if k == x_last:
+                    continue
+                if k in visited_nodes:
+                    continue
+                d_now = np.linalg.norm(qk[k] - qk[x_last])
+                if d_now < d_min:
+                    d_min = d_now
+                    nearest_node = k
+            visited_nodes.append(nearest_node)
+            E.append((x_last, nearest_node))
+            x_last = nearest_node
+
+            if nearest_node in visited_seq:
+                visited_seq[nearest_node] = len(E) - 1
+
+        E.append((x_last, x0))
+
+        def dis_div_hop(k, hop):
+            if hop % K == 0:
+                return np.inf
+            target_k = E[(visited_seq[k] + hop) % len(E)][1]
+            return np.ceil(np.linalg.norm(qk[k] - qk[target_k])) / hop
+        for k in k_large_w:
+            target_step = heapq.nsmallest(1, range(K // 4, K * 3 // 4), lambda hop: dis_div_hop(k, hop))[0]
+            # E.append((k, E[(visited_seq[k] + target_step) % len(E)][1]))
+            print(f'Connect Node {E[-1]}')
+        return E
+
+    @staticmethod
     def make_graph(w, qk: [np.ndarray], E: [(int, int)]):
         res_V = []
         res_E = []
@@ -226,25 +256,31 @@ class EpsilonRT:
         plt.show()
 
     @staticmethod
-    def display_graph(V: [Vertex], E: [(Vertex, Vertex)]):
+    def display_graph(V: [Vertex], E: [(Vertex, Vertex)], K=None):
         for v1, v2 in E:
             plt.plot([v1.q[0], v2.q[0]], [v1.q[1], v2.q[1]], c='g')
         for v in V:
             plt.scatter(v.q[0], v.q[1], c='r' if v.is_virtual else 'b')
+        if K is not None:
+            for k in range(K):
+                plt.text(V[k].q[0], V[k].q[1], str(k))
         plt.show()
 
 
 if __name__ == '__main__':
-    K = 30
+    K = 20
     w = np.random.random(K)
     qk = np.random.random((K, 3)) * 100
-    E = []
-    while len(E) <= 40:
-        v1, v2 = np.random.choice(K, 2)
-        if v1 == v2 or (v1, v2) in E or (v2, v1) in E:
-            continue
-        E.append((v1, v2))
-    G = EpsilonRT(*EpsilonRT.make_graph(w, qk, E))
+    qk[:, 2] = np.zeros(K)
+    # E = []
+    # while len(E) <= 40:
+    #     v1, v2 = np.random.choice(K, 2)
+    #     if v1 == v2 or (v1, v2) in E or (v2, v1) in E:
+    #         continue
+    #     E.append((v1, v2))
+    E = EpsilonRT.filter_edges(w, qk)
+    V, E = EpsilonRT.make_graph(w, qk, E)
+    G = EpsilonRT(V=V, E=E, epsilon=1e-3)
     # print(G.epsilon, 1 / G.candidate_epsilon_recip)
-    G.display_graph(G.V, G.E)
-    G.display_graph(G.Vu, G.Eu)
+    # G.display_graph(G.Vu, G.Eu, len(G.V))
+    G.display_graph(G.V, G.E, len(G.V))
