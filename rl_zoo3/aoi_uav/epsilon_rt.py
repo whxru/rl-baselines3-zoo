@@ -15,6 +15,7 @@ class Vertex:
         self._index = index
         self.is_virtual = is_virtual
         self._neighbors = []
+        self._connected_PoIs = []
 
         self.pi = pi
 
@@ -28,6 +29,15 @@ class Vertex:
 
     def is_neighbor(self, v):
         return v in self._neighbors
+
+    def is_for_poi_pair(self, v1, v2):
+        assert not v1.is_virtual and not v2.is_virtual
+        self._connected_PoIs.append(v1)
+        self._connected_PoIs.append(v2)
+
+    def leads_to_poi(self, start_v):
+        assert not start_v.is_virtual and len(self._connected_PoIs) == 2
+        return self._connected_PoIs[0 if start_v == self._connected_PoIs[1] else 1]
 
     def connect_to(self, v):
         if self.is_neighbor(v):
@@ -59,8 +69,8 @@ class EpsilonRT:
         Eu = []
         one_minus_epsilon_mag_E_pos = 1 - epsilon * len(self.E_positive)
         for v in self.V:
-            v.pi = one_minus_epsilon_mag_E_pos * np.sqrt(v.w) / self.sum_sqrt_w
-            Vu.append(Vertex(is_virtual=False, index=v.k, q=v.q))
+            v_pi = one_minus_epsilon_mag_E_pos * np.sqrt(v.w) / self.sum_sqrt_w
+            Vu.append(Vertex(is_virtual=False, index=v.k, q=v.q, pi=v_pi))
 
         for v1, v2 in self.E:
             v1 = Vu[v1.k]
@@ -76,6 +86,7 @@ class EpsilonRT:
                 pi_v = epsilon / d
                 for n in range(1, 1 + d):
                     v_intermediate = Vertex(pi=pi_v, is_virtual=True, index=len(Vu), q=v1.q+n*delta_q)
+                    v_intermediate.is_for_poi_pair(v1, v2)
                     v_last = Vu[-1]
                     Vu.append(v_intermediate)
                     if n == 1:
@@ -97,7 +108,7 @@ class EpsilonRT:
         self.d = np.zeros((len(self.V), len(self.V))).astype(int)
         for v1, v2 in self.E:
             d = np.ceil(np.linalg.norm(v1.q - v2.q) / self.lamb_xoy) - 1
-            print(f'Node {v1.k} and {v2.k}: distance = {np.linalg.norm(v1.q - v2.q)} / position {v1.q} and {v2.q}')
+            # print(f'Node {v1.k} and {v2.k}: distance = {np.linalg.norm(v1.q - v2.q)} / position {v1.q} and {v2.q}')
             self.d[v1.k, v2.k] = d
             self.d[v2.k, v1.k] = d
             self.d_max = max(self.d_max, d)
@@ -112,33 +123,33 @@ class EpsilonRT:
             self._pick_epsilon()
         self.one_minus_epsilon_mag_E_pos = 1 - self.epsilon * len(self.E_positive)
 
-    def _pick_epsilon(self, left_min=3e-6, T_exp=4000):
+    def _pick_epsilon(self, padding=1e-5, T_exp=2000):
         t0 = time.time()
         K = 50
         b = 1 / len(self.E_positive)
-        candidate_epsilons_left = [left_min]
-        candidate_epsilons_right = [b - left_min]
-        sampling_func = lambda x: 1 / x / (b - x)
-        y_max = sampling_func(left_min)
-        y_min = sampling_func(b / 25)
-        num_sample_on_slope = int(K * 0.3)
-        num_sample_on_plane = K - num_sample_on_slope * 2
-        delta_y = (y_max - y_min) / (num_sample_on_slope - 1)
-        for k in range(num_sample_on_slope - 1):
-            progress = (k + 1) / (num_sample_on_slope)
-            y = y_max * (1 - progress) + y_min * progress
-            x = .5 * (b - np.sqrt(b**2 - 4 / y))
-            candidate_epsilons_left.append(x)
-            candidate_epsilons_right.insert(0, b - x)
-        delta_x = (candidate_epsilons_right[0] - candidate_epsilons_left[-1]) / (num_sample_on_plane - 1)
-        candidate_epsilons_median = np.linspace(candidate_epsilons_left[-1] + delta_x, candidate_epsilons_right[0], num=num_sample_on_plane, endpoint=False).tolist()
-        candidate_epsilons = candidate_epsilons_left + candidate_epsilons_median + candidate_epsilons_right
+        # candidate_epsilons_left = [padding]
+        # candidate_epsilons_right = [b - padding]
+        # sampling_func = lambda x: 1 / x / (b - x)
+        # y_max = sampling_func(padding)
+        # y_min = sampling_func(b / 25)
+        # num_sample_on_slope = int(K * 0.3)
+        # num_sample_on_plane = K - num_sample_on_slope * 2
+        # delta_y = (y_max - y_min) / (num_sample_on_slope - 1)
+        # for k in range(num_sample_on_slope - 1):
+        #     progress = (k + 1) / num_sample_on_slope
+        #     y = y_max * (1 - progress) + y_min * progress
+        #     x = .5 * (b - np.sqrt(b**2 - 4 / y))
+        #     candidate_epsilons_left.append(x)
+        #     candidate_epsilons_right.insert(0, b - x)
+        # delta_x = (candidate_epsilons_right[0] - candidate_epsilons_left[-1]) / (num_sample_on_plane - 1)
+        # candidate_epsilons_median = np.linspace(candidate_epsilons_left[-1] + delta_x, candidate_epsilons_right[0], num=num_sample_on_plane, endpoint=False).tolist()
+        # candidate_epsilons = candidate_epsilons_left + candidate_epsilons_median + candidate_epsilons_right
         # Plot the candidate epsilons
         # plt.scatter(candidate_epsilons, [sampling_func(x) for x in candidate_epsilons])
         # plt.show()
         # plt.scatter(candidate_epsilons_left, [sampling_func(x) for x in candidate_epsilons_left])
         # plt.show()
-
+        candidate_epsilons = np.linspace(padding, 1 / len(self.E_positive), K, endpoint=False)
         candidate_dRT_agents = [DecisiveRT(EpsilonRT(self.V, self.E, self.T, self.lamb_xoy, epsilon)) for epsilon in candidate_epsilons]
 
         # [ICML'2013] Almost Optimal Exploration in Multi-Armed Bandits
@@ -164,6 +175,7 @@ class EpsilonRT:
         best_arm = arms[0]
         plt.plot(np.arange(K), empirical_sums / sample_counters)
         plt.scatter(best_arm, empirical_sums[best_arm] / sample_counters[best_arm])
+        plt.title('Candidate epsilons $\\to$$ simulated Av PAoI')
         plt.show()
         self.epsilon = candidate_epsilons[best_arm]
         print(f'Hyperparamter optimization time: {time.time() - t0} seconds')
@@ -180,17 +192,22 @@ class EpsilonRT:
             assert p[v.k, v.k] >= 0
         return p
 
-    # length == 0 means stops until a non-virtual and non-self PoI is met
+    # length == 0 means stops until a new vertex (no matter virtual or not) is met
     # length > 0 means samples for a fixed number of steps
     def step(self, start: int, length=1):
         x = self.Vu[start]
-        done = False
         step_count = 0
-        while not done:
+        while True:
             step_count += 1
             x_next = np.random.choice(self.Vu, p=self.p[x.k])
-            done = (length == 0 and not x_next.is_virtual and not x == x_next) or (step_count == length) or (step_count >= self.T)
+            # if x_next != x:
+            #     print(f'{x.k} to {x_next.k}')
             x = x_next
+            if length == 0 and not x.k == start:
+                x = x.leads_to_poi(self.Vu[start])
+                break
+            if step_count == length or step_count >= self.T:
+                break
         return x, step_count
 
     @staticmethod
@@ -231,7 +248,7 @@ class EpsilonRT:
         for k in k_large_w:
             target_step = heapq.nsmallest(1, range(K // 4, K * 3 // 4), lambda hop: dis_div_hop(k, hop))[0]
             # E.append((k, E[(visited_seq[k] + target_step) % len(E)][1]))
-            print(f'Connect Node {E[-1]}')
+            # print(f'Connect Node {E[-1]}')
         return E
 
     @staticmethod

@@ -9,7 +9,7 @@ import seaborn as sns
 
 class AoIUavTrajectoryPlanningEnv(gym.Env):
 
-    def __init__(self, observation_size=50, world_size=2e4, K=20, T=2000, seed=0, pos_seed=None):
+    def __init__(self, observation_size=50, world_size=2e4, K=20, T=2000, seed=0, pos_seed=None, x0=0):
         self.observation_size = observation_size
         self.world_size = world_size
         self.K = K
@@ -20,6 +20,7 @@ class AoIUavTrajectoryPlanningEnv(gym.Env):
         self.qk = self.config_rs.random((self.K, 3)) * world_size
         self.qk[:, -1] = 0
         self.w = self.config_rs.random(self.K)
+        self.x0 = x0
 
         self.env_name = 'AoI-UAV'
         self.rs = np.random.RandomState(seed=seed) if seed > 0 else np.random
@@ -48,8 +49,17 @@ class AoIUavTrajectoryPlanningEnv(gym.Env):
         for k, q in enumerate(self.qk):
             self.poi_in_grid[int((q[0] // self.grid_size) * self.observation_size + q[1] // self.grid_size), k] = 1
 
+        self._xoy_cmds = []
+        self._current_delta_qu = np.zeros(3)
+
+    def set_agent(self, agent, agent_type='xoy'):
+        if agent_type == 'xoy':
+            self._xoy_agent = agent
+        elif agent_type == 'yaw':
+            self._yaw_agent = agent
+
     def _reset_stat_vars(self):
-        self.q_u = np.array([self.qk[self.K // 2][0], self.qk[self.K // 2][1], self.z_min])
+        self.qu = np.array([self.qk[self.x0][0], self.qk[self.x0][1], self.z_min])
         self.yaw = 0  #
         self.t = 0
         self.expect_h = np.zeros(self.K)
@@ -60,23 +70,26 @@ class AoIUavTrajectoryPlanningEnv(gym.Env):
         self.z_history = [self.z_min]
 
     @property
+    def q_u_ground(self):
+        return np.array([self.qu[0], self.qu[1], 0])
+    @property
     def gamma(self):
         return self.yaw - self.arccot_eta
 
     def r_u(self, z=None):
         if z is None:
-            z = self.q_u[2]
-        return self.q_u[2] / self.tan_half_beta
+            z = self.qu[2]
+        return self.qu[2] / self.tan_half_beta
 
     def l_x(self, z=None):
         if z is None:
-            z = self.q_u[2]
+            z = self.qu[2]
         r = self.r_u(z)
         return r * np.sin(self.arctan_eta)
 
     def l_y(self, z=None):
         if z is None:
-            z = self.q_u[2]
+            z = self.qu[2]
         r = self.r_u(z)
         return r * np.cos(self.arctan_eta)
 
@@ -94,14 +107,14 @@ class AoIUavTrajectoryPlanningEnv(gym.Env):
 
     def p(self, z=None):
         if z is None:
-            z = self.q_u[2]
+            z = self.qu[2]
         if self.z_min <= z <= self.z_max:
             return self._p_func(z, *self.p_func_params)
         return 0
 
     def covered(self, q=None, qk=None):
         if q is None:
-            q = self.q_u.copy()
+            q = self.qu.copy()
         if qk is None:
             qk = self.qk.copy()
         q_hat_u = np.array([q[0], q[1], 0])
@@ -121,14 +134,30 @@ class AoIUavTrajectoryPlanningEnv(gym.Env):
 
     def step(self, action):
         delta_z = action * self.lamb_z
-        self.q_u[2] += delta_z
-        self.q_u[2] = max(self.q_u[2], self.z_min)
-        self.z_history.append(self.q_u[2])
+        self.qu[2] += delta_z
+        self.qu[2] = max(self.qu[2], self.z_min)
+        self.z_history.append(self.qu[2])
 
         current_p = self.p()
         current_poi_covered = self.covered()
 
         # todo: Control the XOY movement for the UAV
+        if len(self._xoy_cmds) > 0:
+            _, latest_launch_time, latest_arrival_time = self._xoy_cmds[-1]
+            if latest_launch_time < self.t <= latest_arrival_time:
+                assert np.linalg.norm(self._current_delta_qu) <= self.lamb_xoy + 1e-5
+                self.qu += self._current_delta_qu
+        if len(self._xoy_cmds) == 0 or self.t == latest_arrival_time:
+            x_current = self.x0 if len(self._xoy_cmds) == 0 else self._xoy_cmds[-1][0]
+            x_next, t_launch, t_arrive = self._xoy_agent.step(start=x_current)
+            t_launch += self.t
+            t_arrive += self.t
+            self._xoy_cmds.append((x_next, t_launch, t_arrive))
+            if t_arrive == t_launch:
+                self._current_delta_qu = np.zeros(3)
+            else:
+                self._current_delta_qu = (self.qk[x_next] - self.qk[x_current]) / (t_arrive - t_launch)
+
         # todo: Control the yaw of the UAV
         self.yaw = np.random.random() * np.pi * 2
 
@@ -158,7 +187,7 @@ class AoIUavTrajectoryPlanningEnv(gym.Env):
 
     def _compute_obs(self, q_u=None, h=None):
         if q_u is None:
-            q_u = self.q_u.copy()
+            q_u = self.qu.copy()
         if h is None:
             h = self.expect_h.copy()
         qk = self.qk.copy()
@@ -178,9 +207,9 @@ class AoIUavTrajectoryPlanningEnv(gym.Env):
         return np.stack((grid_covered_poi_h, grid_covered_by_uav))
 
     def plot_obs(self, obs):
-        print(f'Current height: {self.q_u[2]} meter')
-        sns.heatmap(obs[0])
-        plt.show()
+        print(f'Current height: {self.qu[2]} meter')
+        # sns.heatmap(obs[0])
+        # plt.show()
         sns.heatmap(obs[1])
         plt.show()
 
@@ -193,15 +222,20 @@ class AoIUavTrajectoryPlanningEnv(gym.Env):
 
 
 if __name__ == '__main__':
+    from rl_zoo3.aoi_uav.epsilon_rt import EpsilonRT
+    from rl_zoo3.aoi_uav.decisive_rt import DecisiveRT
     # Is env runnable with sampled action
     t0 = time.time()
     env = AoIUavTrajectoryPlanningEnv(world_size=1000, observation_size=50, T=1800, K=60)
+    V, E = EpsilonRT.make_graph(env.w, env.qk, EpsilonRT.filter_edges(env.w, env.qk, env.x0))
+    xoy_agent = DecisiveRT(EpsilonRT(V, E, epsilon=3e-3))
+    env.set_agent(xoy_agent, 'xoy')
     env.reset()
     done = False
     while not done:
         action = env.action_space.sample()
         obs, reward, done, info = env.step(action)
-        if env.t % 900 == 0:
+        if env.t % 200 == 0:
             env.render()
     print(env.AoI_record)
     print(f'One episode consumes {time.time() - t0} seconds')
