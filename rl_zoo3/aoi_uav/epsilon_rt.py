@@ -139,8 +139,6 @@ class EpsilonRT:
         # plt.scatter(candidate_epsilons_left, [sampling_func(x) for x in candidate_epsilons_left])
         # plt.show()
 
-        candidate_uDTGs = [self.build_uDTG(epsilon) for epsilon in candidate_epsilons]
-        candidate_p = [self.metropolis_hastings(*uDTG) for uDTG in candidate_uDTGs]
         candidate_dRT_agents = [DecisiveRT(EpsilonRT(self.V, self.E, self.T, self.lamb_xoy, epsilon)) for epsilon in candidate_epsilons]
 
         # [ICML'2013] Almost Optimal Exploration in Multi-Armed Bandits
@@ -156,6 +154,8 @@ class EpsilonRT:
             for arm in arms:
                 with Pool() as pool:
                     empirical_sums[arm] += np.sum(pool.map(arm_reward, [arm] * sampled_times))
+                    pool.close()
+                    pool.join()
                 # for _ in range(sampled_times):
                 #     empirical_sums[arm] += candidate_dRT_agents[arm].simu_average_pAoI()
             sample_counters[arms] += sampled_times
@@ -268,7 +268,7 @@ class EpsilonRT:
 
 
 if __name__ == '__main__':
-    K = 20
+    K = 50
     w = np.random.random(K)
     qk = np.random.random((K, 3)) * 100
     qk[:, 2] = np.zeros(K)
@@ -280,7 +280,7 @@ if __name__ == '__main__':
     #     E.append((v1, v2))
     E = EpsilonRT.filter_edges(w, qk)
     V, E = EpsilonRT.make_graph(w, qk, E)
-    G = EpsilonRT(V=V, E=E, epsilon=1e-3)
+    G = EpsilonRT(V=V, E=E)
     # print(G.epsilon, 1 / G.candidate_epsilon_recip)
     # G.display_graph(G.Vu, G.Eu, len(G.V))
     G.display_graph(G.V, G.E, len(G.V))
