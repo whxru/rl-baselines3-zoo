@@ -45,6 +45,7 @@ class AoIUavTrajectoryPlanningEnv(gym.Env):
         self.grid_indices = np.array(np.meshgrid(range(self.observation_size), range(self.observation_size), [0])).T.reshape(self.observation_size**2, 3)
         self.grid_size = self.world_size / self.observation_size
         self.grid_q = (self.grid_indices + .5) * self.grid_size
+        self.grid_q[:, 2] = 0
         self.poi_in_grid = np.zeros((self.observation_size**2, len(self.qk)))
         for k, q in enumerate(self.qk):
             self.poi_in_grid[int((q[0] // self.grid_size) * self.observation_size + q[1] // self.grid_size), k] = 1
@@ -158,7 +159,6 @@ class AoIUavTrajectoryPlanningEnv(gym.Env):
             else:
                 self._current_delta_qu = (self.qk[x_next] - self.qk[x_current]) / (t_arrive - t_launch)
 
-        # todo: Control the yaw of the UAV
         self.yaw = np.random.random() * np.pi * 2
 
         update_prob = current_p * current_poi_covered
@@ -173,6 +173,8 @@ class AoIUavTrajectoryPlanningEnv(gym.Env):
                 self.actual_h[k] = 1
             else:
                 self.actual_h[k] += 1
+                if self.t == self.T - 1:
+                    self.actual_peak_h[k].append(self.actual_h[k])
 
         self.t += 1
         obs = self._compute_obs()
@@ -181,7 +183,8 @@ class AoIUavTrajectoryPlanningEnv(gym.Env):
         info = None
 
         if done:
-            self.AoI_record.append(np.dot(self.w, self.expect_sum_h) / self.T)
+            # self.AoI_record.append(np.dot(self.w, self.expect_sum_h) / self.T)
+            self.AoI_record.append(np.dot(self.w, np.array([np.sum(pAoI) for pAoI in self.actual_peak_h])) / self.T)
 
         return obs, reward, done, info
 
@@ -204,10 +207,12 @@ class AoIUavTrajectoryPlanningEnv(gym.Env):
         grid_covered_poi_h = np.dot(np.logical_or(grid_covered_poi, self.poi_in_grid), h.reshape((K, 1))).reshape(self.observation_size, self.observation_size)
 
         grid_covered_by_uav = self.covered(q_u, self.grid_q).reshape((self.observation_size, self.observation_size)) * self.p()
+        uav_grid_x, uav_grid_y = int(q_u[0] // self.grid_size), int(q_u[1] // self.grid_size)
+        grid_covered_by_uav[uav_grid_x, uav_grid_y] = min(grid_covered_by_uav[uav_grid_x, uav_grid_y] + 1, 1)
         return np.stack((grid_covered_poi_h, grid_covered_by_uav))
 
     def plot_obs(self, obs):
-        print(f'Current height: {self.qu[2]} meter')
+        # print(f'Current height: {self.qu[2]} meter')
         # sns.heatmap(obs[0])
         # plt.show()
         sns.heatmap(obs[1])
@@ -222,19 +227,21 @@ class AoIUavTrajectoryPlanningEnv(gym.Env):
 
 
 if __name__ == '__main__':
+    np.random.seed(1997)
     from rl_zoo3.aoi_uav.epsilon_rt import EpsilonRT
     from rl_zoo3.aoi_uav.decisive_rt import DecisiveRT
     # Is env runnable with sampled action
     t0 = time.time()
     env = AoIUavTrajectoryPlanningEnv(world_size=1000, observation_size=50, T=1800, K=60)
     V, E = EpsilonRT.make_graph(env.w, env.qk, EpsilonRT.filter_edges(env.w, env.qk, env.x0))
-    xoy_agent = DecisiveRT(EpsilonRT(V, E, epsilon=3e-3))
+    xoy_agent = DecisiveRT(EpsilonRT(V, E, epsilon=None))
+    print(xoy_agent.simu_average_pAoI())
     env.set_agent(xoy_agent, 'xoy')
     env.reset()
     done = False
     while not done:
         action = env.action_space.sample()
-        obs, reward, done, info = env.step(action)
+        obs, reward, done, info = env.step(0)
         if env.t % 200 == 0:
             env.render()
     print(env.AoI_record)

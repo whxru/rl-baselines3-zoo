@@ -53,13 +53,14 @@ class Vertex:
 
 class EpsilonRT:
 
-    def __init__(self, V, E, T=1800, lamb_xoy=9, epsilon=None):
+    def __init__(self, V, E, T=1800, lamb_xoy=9, epsilon=None, seed=1997):
         self.V = V
         self.E = E
         self.T = T
         self.lamb_xoy = lamb_xoy
 
         self.epsilon = epsilon
+        self.rs = np.random.RandomState(seed=seed)
         self._cal_vals()
         self.Vu, self.Eu = self.build_uDTG(self.epsilon)
         self.p = EpsilonRT.metropolis_hastings(self.Vu, self.Eu)
@@ -70,7 +71,7 @@ class EpsilonRT:
         one_minus_epsilon_mag_E_pos = 1 - epsilon * len(self.E_positive)
         for v in self.V:
             v_pi = one_minus_epsilon_mag_E_pos * np.sqrt(v.w) / self.sum_sqrt_w
-            Vu.append(Vertex(is_virtual=False, index=v.k, q=v.q, pi=v_pi))
+            Vu.append(Vertex(is_virtual=False, index=v.k, q=v.q, pi=v_pi, w=v.w))
 
         for v1, v2 in self.E:
             v1 = Vu[v1.k]
@@ -163,7 +164,7 @@ class EpsilonRT:
             sampled_times = math.floor(T_exp / len(arms) / math.ceil(np.log2(K)))
             print(f'Sampling times: {sampled_times} for arm set {arms}')
             for arm in arms:
-                with Pool() as pool:
+                with Pool(processes=2) as pool:
                     empirical_sums[arm] += np.sum(pool.map(arm_reward, [arm] * sampled_times))
                     pool.close()
                     pool.join()
@@ -199,12 +200,13 @@ class EpsilonRT:
         step_count = 0
         while True:
             step_count += 1
-            x_next = np.random.choice(self.Vu, p=self.p[x.k])
+            x_next = self.rs.choice(self.Vu, p=self.p[x.k])
             # if x_next != x:
             #     print(f'{x.k} to {x_next.k}')
             x = x_next
             if length == 0 and not x.k == start:
-                x = x.leads_to_poi(self.Vu[start])
+                if x.is_virtual:
+                    x = x.leads_to_poi(self.Vu[start])
                 break
             if step_count == length or step_count >= self.T:
                 break
