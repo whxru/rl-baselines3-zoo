@@ -149,15 +149,15 @@ class AoIUavTrajectoryPlanningEnv(gym.Env):
                 assert np.linalg.norm(self._current_delta_qu) <= self.lamb_xoy + 1e-5
                 self.qu += self._current_delta_qu
         if len(self._xoy_cmds) == 0 or self.t == latest_arrival_time:
-            x_current = self.x0 if len(self._xoy_cmds) == 0 else self._xoy_cmds[-1][0]
-            x_next, t_launch, t_arrive = self._xoy_agent.step(start=x_current)
+            q_current = self.q_u_ground
+            q_next, t_launch, t_arrive = self._xoy_agent.step(start=q_current)
             t_launch += self.t
             t_arrive += self.t
-            self._xoy_cmds.append((x_next, t_launch, t_arrive))
+            self._xoy_cmds.append((q_next, t_launch, t_arrive))
             if t_arrive == t_launch:
                 self._current_delta_qu = np.zeros(3)
             else:
-                self._current_delta_qu = (self.qk[x_next] - self.qk[x_current]) / (t_arrive - t_launch)
+                self._current_delta_qu = (q_next - q_current) / (t_arrive - t_launch)
 
         self.yaw = np.random.random() * np.pi * 2
 
@@ -213,8 +213,8 @@ class AoIUavTrajectoryPlanningEnv(gym.Env):
 
     def plot_obs(self, obs):
         # print(f'Current height: {self.qu[2]} meter')
-        # sns.heatmap(obs[0])
-        # plt.show()
+        sns.heatmap(obs[0])
+        plt.show()
         sns.heatmap(obs[1])
         plt.show()
 
@@ -227,21 +227,19 @@ class AoIUavTrajectoryPlanningEnv(gym.Env):
 
 
 if __name__ == '__main__':
-    np.random.seed(1997)
+    np.random.seed(2077)
     from rl_zoo3.aoi_uav.epsilon_rt import EpsilonRT
-    from rl_zoo3.aoi_uav.decisive_rt import DecisiveRT
     # Is env runnable with sampled action
     t0 = time.time()
-    env = AoIUavTrajectoryPlanningEnv(world_size=1000, observation_size=50, T=1800, K=60)
-    V, E = EpsilonRT.make_graph(env.w, env.qk, EpsilonRT.filter_edges(env.w, env.qk, env.x0))
-    xoy_agent = DecisiveRT(EpsilonRT(V, E, epsilon=None))
-    print(xoy_agent.simu_average_pAoI())
+    env = AoIUavTrajectoryPlanningEnv(world_size=1000, observation_size=50, T=1800, K=20)
+    V, E = EpsilonRT.make_graph(env.w, env.qk, EpsilonRT.build_edges(env.w, env.qk, env.x0))
+    xoy_agent = EpsilonRT(V, E, epsilon=0.04)
     env.set_agent(xoy_agent, 'xoy')
     env.reset()
     done = False
     while not done:
         action = env.action_space.sample()
-        obs, reward, done, info = env.step(0)
+        obs, reward, done, info = env.step(action)
         if env.t % 200 == 0:
             env.render()
     print(env.AoI_record)

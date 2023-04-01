@@ -3,7 +3,6 @@ import time
 import numpy as np
 import math, random, heapq
 import matplotlib.pyplot as plt
-from rl_zoo3.aoi_uav.decisive_rt import DecisiveRT
 from multiprocessing import Pool
 
 
@@ -15,7 +14,6 @@ class Vertex:
         self._index = index
         self.is_virtual = is_virtual
         self._neighbors = []
-        self._connected_PoIs = []
 
         self.pi = pi
 
@@ -29,15 +27,6 @@ class Vertex:
 
     def is_neighbor(self, v):
         return v in self._neighbors
-
-    def is_for_poi_pair(self, v1, v2):
-        assert not v1.is_virtual and not v2.is_virtual
-        self._connected_PoIs.append(v1)
-        self._connected_PoIs.append(v2)
-
-    def leads_to_poi(self, start_v):
-        assert not start_v.is_virtual and len(self._connected_PoIs) == 2
-        return self._connected_PoIs[0 if start_v == self._connected_PoIs[1] else 1]
 
     def connect_to(self, v):
         if self.is_neighbor(v):
@@ -53,65 +42,34 @@ class Vertex:
 
 class EpsilonRT:
 
-    def __init__(self, V, E, T=1800, lamb_xoy=9, epsilon=None, seed=1997):
+    def __init__(self, V, E, T=1800, lamb_xoy=9, epsilon=None, seed=1997, x0=0):
         self.V = V
         self.E = E
         self.T = T
         self.lamb_xoy = lamb_xoy
+        self.x0 = x0
+        self.K = len(V)
+
+        self.w = np.array([v.w for v in self.V])
 
         self.epsilon = epsilon
         self.rs = np.random.RandomState(seed=seed)
         self._cal_vals()
-        self.Vu, self.Eu = self.build_uDTG(self.epsilon)
-        self.p = EpsilonRT.metropolis_hastings(self.Vu, self.Eu)
-
-    def build_uDTG(self, epsilon):
-        Vu = []
-        Eu = []
-        one_minus_epsilon_mag_E_pos = 1 - epsilon * len(self.E_positive)
-        for v in self.V:
-            v_pi = one_minus_epsilon_mag_E_pos * np.sqrt(v.w) / self.sum_sqrt_w
-            Vu.append(Vertex(is_virtual=False, index=v.k, q=v.q, pi=v_pi, w=v.w))
-
-        for v1, v2 in self.E:
-            v1 = Vu[v1.k]
-            v2 = Vu[v2.k]
-            d = self.d[v1.k, v2.k]
-            if d == -1:
-                continue
-            elif d == 0:
-                Eu.append((v1, v2))
-                v1.connect_to(v2)
-            else:  # d >= 1
-                delta_q = (v2.q - v1.q) / (1 + d)
-                pi_v = epsilon / d
-                for n in range(1, 1 + d):
-                    v_intermediate = Vertex(pi=pi_v, is_virtual=True, index=len(Vu), q=v1.q+n*delta_q)
-                    v_intermediate.is_for_poi_pair(v1, v2)
-                    v_last = Vu[-1]
-                    Vu.append(v_intermediate)
-                    if n == 1:
-                        v1.connect_to(v_intermediate)
-                        Eu.append((v1, v_intermediate))
-                    if n == d:
-                        v_intermediate.connect_to(v2)
-                        Eu.append((v_intermediate, v2))
-                    if 1 < n <= d:
-                        v_last.connect_to(v_intermediate)
-                        Eu.append((v_last, v_intermediate))
-        return Vu, Eu
+        print(f'Epsilon: {self.epsilon}')
 
     def _cal_vals(self):
         self.E_positive = []
         self.E_one = []
         self.E_two = []
         self.d_max = -2
-        self.d = np.zeros((len(self.V), len(self.V))).astype(int)
+        self.d = np.zeros((self.K, self.K)).astype(int)
+        self.o = np.zeros((self.K, self.K))
+        self.p_raw = np.zeros((self.K, self.K))
         for v1, v2 in self.E:
             d = np.ceil(np.linalg.norm(v1.q - v2.q) / self.lamb_xoy) - 1
             # print(f'Node {v1.k} and {v2.k}: distance = {np.linalg.norm(v1.q - v2.q)} / position {v1.q} and {v2.q}')
             self.d[v1.k, v2.k] = d
-            self.d[v2.k, v1.k] = d
+            self.o[v1.k, :] += d + 1
             self.d_max = max(self.d_max, d)
             if d == 1:
                 self.E_one.append((v1, v2))
@@ -119,44 +77,94 @@ class EpsilonRT:
             elif d > 1:
                 self.E_two.append((v1, v2))
                 self.E_positive.append((v1, v2))
-        self.sum_sqrt_w = np.sum([np.sqrt(v.w) for v in self.V])
-        if self.epsilon is None:
-            self._pick_epsilon()
-        self.one_minus_epsilon_mag_E_pos = 1 - self.epsilon * len(self.E_positive)
+        self.o = (1 + self.d) / self.o
+        for v1, v2 in self.E:
+            self.p_raw[v1.k, v2.k] = 1 / self.o[v1.k, v2.k] * min(1, np.sqrt(v2.w) * self.o[v1.k, v2.k] / np.sqrt(v1.w) / self.o[v2.k, v1.k])
 
-    def _pick_epsilon(self, padding=1e-5, T_exp=2000):
+        # Search the bound of epsilon
+        right_bound = 2
+        search_speed = 0.9
+        while True:
+            mid_bound = right_bound * search_speed
+            p_now = mid_bound * self.p_raw
+            pi_now = self._pi(p_now)
+            feasible_now = True
+            for v in self.V:
+                if pi_now[v.k] < np.dot(pi_now, p_now[:, v.k]):
+                    feasible_now = False
+                    break
+            right_bound = mid_bound
+            if feasible_now:
+                self.epsilon_bound = right_bound
+                break
+        # Tune a good epsilon within the range
+        if self.epsilon is None or self.epsilon > self.epsilon_bound:
+            self._pick_epsilon()
+        # self.epsilon = self.epsilon_bound / 2
+        self.p = self.p_raw * self.epsilon
+        for k in range(self.K):
+            self.p[k, k] = 1 - np.sum(self.p[k, :])
+        self.pi = self._pi(self.p)
+        for v in self.V:
+            v.pi = self.pi[v.k]
+        # Check optimality gap
+        pi_opt = np.sqrt(self.w) / np.sum(np.sqrt(self.w))
+        print(f'Opt: {np.sum(self.w / pi_opt)}, ours: {np.sum(self.w / self.pi)}')
+
+    def _pi(self, p):
+            param_agg = np.ones(self.K)  # 1 + sum_{k\neq k'}d_{k,k'}p_{k,k'}^\text{raw} for each PoI k
+            for v1, v2 in self.E:
+                param_agg[v1.k] += self.d[v1.k, v2.k] * p[v1.k, v2.k]
+            pi_res = np.sqrt(self.w / param_agg) / np.sum(np.sqrt(self.w * param_agg))
+            return pi_res
+
+    def _pick_epsilon(self, padding=1e-5, T_exp=1000):
         t0 = time.time()
         K = 50
-        b = 1 / len(self.E_positive)
-        # candidate_epsilons_left = [padding]
-        # candidate_epsilons_right = [b - padding]
-        # sampling_func = lambda x: 1 / x / (b - x)
-        # y_max = sampling_func(padding)
-        # y_min = sampling_func(b / 25)
-        # num_sample_on_slope = int(K * 0.3)
-        # num_sample_on_plane = K - num_sample_on_slope * 2
-        # delta_y = (y_max - y_min) / (num_sample_on_slope - 1)
-        # for k in range(num_sample_on_slope - 1):
-        #     progress = (k + 1) / num_sample_on_slope
-        #     y = y_max * (1 - progress) + y_min * progress
-        #     x = .5 * (b - np.sqrt(b**2 - 4 / y))
-        #     candidate_epsilons_left.append(x)
-        #     candidate_epsilons_right.insert(0, b - x)
-        # delta_x = (candidate_epsilons_right[0] - candidate_epsilons_left[-1]) / (num_sample_on_plane - 1)
-        # candidate_epsilons_median = np.linspace(candidate_epsilons_left[-1] + delta_x, candidate_epsilons_right[0], num=num_sample_on_plane, endpoint=False).tolist()
-        # candidate_epsilons = candidate_epsilons_left + candidate_epsilons_median + candidate_epsilons_right
+        b = self.epsilon_bound
+        candidate_epsilons_left = [padding]
+        candidate_epsilons_right = [b - padding]
+        sampling_func = lambda x: 1 / x / (b - x)
+        y_max = sampling_func(padding)
+        y_min = sampling_func(b / 25)
+        num_sample_on_slope = int(K * 0.3)
+        num_sample_on_plane = K - num_sample_on_slope * 2
+        delta_y = (y_max - y_min) / (num_sample_on_slope - 1)
+        for k in range(num_sample_on_slope - 1):
+            progress = (k + 1) / num_sample_on_slope
+            y = y_max * (1 - progress) + y_min * progress
+            x = .5 * (b - np.sqrt(b**2 - 4 / y))
+            candidate_epsilons_left.append(x)
+            candidate_epsilons_right.insert(0, b - x)
+        delta_x = (candidate_epsilons_right[0] - candidate_epsilons_left[-1]) / (num_sample_on_plane - 1)
+        candidate_epsilons_median = np.linspace(candidate_epsilons_left[-1] + delta_x, candidate_epsilons_right[0], num=num_sample_on_plane, endpoint=False).tolist()
+        candidate_epsilons = candidate_epsilons_left + candidate_epsilons_median + candidate_epsilons_right
         # Plot the candidate epsilons
         # plt.scatter(candidate_epsilons, [sampling_func(x) for x in candidate_epsilons])
         # plt.show()
         # plt.scatter(candidate_epsilons_left, [sampling_func(x) for x in candidate_epsilons_left])
         # plt.show()
-        candidate_epsilons = np.linspace(padding, 1 / len(self.E_positive), K, endpoint=False)
-        candidate_dRT_agents = [DecisiveRT(EpsilonRT(self.V, self.E, self.T, self.lamb_xoy, epsilon)) for epsilon in candidate_epsilons]
+        # candidate_epsilons = np.linspace(padding, self.epsilon_bound, K, endpoint=True)
 
         # [ICML'2013] Almost Optimal Exploration in Multi-Armed Bandits
         global arm_reward
-        def arm_reward(arm):
-            return candidate_dRT_agents[arm].simu_average_pAoI()
+        def arm_reward(epsilon):
+            p = self.p_raw * epsilon
+            for k in range(self.K):
+                p[k, k] = 1 - np.sum(p[k, :])
+            x = self.x0
+            t = 0
+            visited_times = np.ones(self.K)
+            while t < self.T:
+                visited_times[x] += 1
+                x_next = np.random.choice(self.K, p=p[x])
+                if x_next == x:
+                    t += 1
+                else:
+                    t += self.d[x, x_next] + 1
+                x = x_next
+            return np.sum(self.w / visited_times * self.T)
+
         arms = list(range(K))
         empirical_sums = np.zeros(K)
         sample_counters = np.zeros(K)
@@ -165,7 +173,7 @@ class EpsilonRT:
             print(f'Sampling times: {sampled_times} for arm set {arms}')
             for arm in arms:
                 with Pool(processes=2) as pool:
-                    empirical_sums[arm] += np.sum(pool.map(arm_reward, [arm] * sampled_times))
+                    empirical_sums[arm] += np.sum(pool.map(arm_reward, candidate_epsilons))
                     pool.close()
                     pool.join()
                 # for _ in range(sampled_times):
@@ -181,39 +189,14 @@ class EpsilonRT:
         self.epsilon = candidate_epsilons[best_arm]
         print(f'Hyperparamter optimization time: {time.time() - t0} seconds')
 
-    @staticmethod
-    def metropolis_hastings(Vu, Eu):
-        p = np.zeros((len(Vu), len(Vu)))
-        for v1, v2 in Eu:
-            if v1 != v2:
-                p[v1.k, v2.k] = 1 / v1.deg * min(1.0, (v2.pi * v1.deg) / (v1.pi * v2.deg))
-                p[v2.k, v1.k] = 1 / v2.deg * min(1.0, (v1.pi * v2.deg) / (v2.pi * v1.deg))
-        for v in Vu:
-            p[v.k, v.k] = 1 - np.sum(p[v.k])
-            assert p[v.k, v.k] >= 0
-        return p
-
-    # length == 0 means stops until a new vertex (no matter virtual or not) is met
-    # length > 0 means samples for a fixed number of steps
-    def step(self, start: int, length=1):
-        x = self.Vu[start]
-        step_count = 0
-        while True:
-            step_count += 1
-            x_next = self.rs.choice(self.Vu, p=self.p[x.k])
-            # if x_next != x:
-            #     print(f'{x.k} to {x_next.k}')
-            x = x_next
-            if length == 0 and not x.k == start:
-                if x.is_virtual:
-                    x = x.leads_to_poi(self.Vu[start])
-                break
-            if step_count == length or step_count >= self.T:
-                break
-        return x, step_count
+    def step(self, start: np.ndarray):
+        x_k = np.argmin([np.linalg.norm(v.q - start) for v in self.V])
+        x = self.V[int(x_k)]
+        x_next = self.rs.choice(self.V, p=self.p[x.k, :])
+        return x_next.q, 0, self.d[x.k, x_next.k] + 1
 
     @staticmethod
-    def filter_edges(w, qk, x0=0):
+    def build_edges(w, qk, x0=0):
         visited_nodes = [x0]
         x_last = x0
         K = len(w)
@@ -235,12 +218,14 @@ class EpsilonRT:
                     nearest_node = k
             visited_nodes.append(nearest_node)
             E.append((x_last, nearest_node))
+            # E.append((nearest_node, x_last))
             x_last = nearest_node
 
             if nearest_node in visited_seq:
                 visited_seq[nearest_node] = len(E) - 1
 
         E.append((x_last, x0))
+        # E.append((x0, x_last))
 
         def dis_div_hop(k, hop):
             if hop % K == 0:
@@ -265,15 +250,6 @@ class EpsilonRT:
             v1.connect_to(v2)
         return res_V, res_E
 
-    def plot_func(self, func, title, use_recip=True):
-        max_epsilon = 1 / len(self.E_positive) - 1e-8
-        min_epsilon = 1e-8
-        epsilon = np.arange(min_epsilon, max_epsilon, max_epsilon / 100)
-        vals = [func(1 / ep if use_recip else ep) for ep in epsilon]
-        plt.plot(epsilon, vals)
-        plt.title(title)
-        plt.show()
-
     @staticmethod
     def display_graph(V: [Vertex], E: [(Vertex, Vertex)], K=None):
         for v1, v2 in E:
@@ -287,19 +263,13 @@ class EpsilonRT:
 
 
 if __name__ == '__main__':
+    np.random.seed(2024)
     K = 50
     w = np.random.random(K)
     qk = np.random.random((K, 3)) * 100
     qk[:, 2] = np.zeros(K)
-    # E = []
-    # while len(E) <= 40:
-    #     v1, v2 = np.random.choice(K, 2)
-    #     if v1 == v2 or (v1, v2) in E or (v2, v1) in E:
-    #         continue
-    #     E.append((v1, v2))
-    E = EpsilonRT.filter_edges(w, qk)
+
+    E = EpsilonRT.build_edges(w, qk)
     V, E = EpsilonRT.make_graph(w, qk, E)
-    G = EpsilonRT(V=V, E=E)
-    # print(G.epsilon, 1 / G.candidate_epsilon_recip)
-    # G.display_graph(G.Vu, G.Eu, len(G.V))
+    G = EpsilonRT(V=V, E=E, epsilon=0.14356087610862445)
     G.display_graph(G.V, G.E, len(G.V))
