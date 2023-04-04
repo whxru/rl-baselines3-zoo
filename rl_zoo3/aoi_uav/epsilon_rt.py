@@ -4,7 +4,7 @@ import numpy as np
 import math, random, heapq
 import matplotlib.pyplot as plt
 from multiprocessing import Pool
-
+from rl_zoo3.aoi_uav.disk_cluster import disk_coverage_cluster
 
 class Vertex:
 
@@ -13,7 +13,7 @@ class Vertex:
         self.q = q
         self._index = index
         self.is_virtual = is_virtual
-        self._neighbors = []
+        self.neighbors = []
 
         self.pi = pi
 
@@ -23,17 +23,16 @@ class Vertex:
 
     @property
     def deg(self):
-        return len(self._neighbors)
+        return len(self.neighbors)
 
     def is_neighbor(self, v):
-        return v in self._neighbors
+        return v in self.neighbors
 
     def connect_to(self, v):
         if self.is_neighbor(v):
             assert v.is_neighbor(self)
             return False
-        self._neighbors.append(v)
-        v.connect_to(self)
+        self.neighbors.append(v)
         return True
 
     def __eq__(self, other):
@@ -48,9 +47,10 @@ class EpsilonRT:
         self.T = T
         self.lamb_xoy = lamb_xoy
         self.x0 = x0
-        self.K = len(V)
 
+        self.K = len(V)
         self.w = np.array([v.w for v in self.V])
+        self.qk = np.array([v.q for v in self.V])
 
         self.epsilon = epsilon
         self.rs = np.random.RandomState(seed=seed)
@@ -62,7 +62,7 @@ class EpsilonRT:
         self.E_one = []
         self.E_two = []
         self.d_max = -2
-        self.d = np.zeros((self.K, self.K)).astype(int)
+        self.d = np.zeros((self.K, self.K)).astype(int) - 1
         self.o = np.zeros((self.K, self.K))
         self.p_raw = np.zeros((self.K, self.K))
         for v1, v2 in self.E:
@@ -77,9 +77,15 @@ class EpsilonRT:
             elif d > 1:
                 self.E_two.append((v1, v2))
                 self.E_positive.append((v1, v2))
+
         self.o = (1 + self.d) / self.o
         for v1, v2 in self.E:
-            self.p_raw[v1.k, v2.k] = 1 / self.o[v1.k, v2.k] * min(1, np.sqrt(v2.w) * self.o[v1.k, v2.k] / np.sqrt(v1.w) / self.o[v2.k, v1.k])
+            # assert self.o[v1.k, v2.k] > 0 and self.o[v2.k, v1.k] > 0
+            if self.o[v2.k, v1.k] == 0:
+                assert self.o[v1.k, v2.k] > 0
+                self.p_raw[v1.k, v2.k] = 1 / self.o[v1.k, v2.k]
+            else:
+                self.p_raw[v1.k, v2.k] = 1 / self.o[v1.k, v2.k] * min(1, np.sqrt(v2.w) * self.o[v1.k, v2.k] / np.sqrt(v1.w) / self.o[v2.k, v1.k])
 
         # Search the bound of epsilon
         right_bound = 2
@@ -105,18 +111,19 @@ class EpsilonRT:
         for k in range(self.K):
             self.p[k, k] = 1 - np.sum(self.p[k, :])
         self.pi = self._pi(self.p)
+        self.sum_pi = np.sum(self.pi)
         for v in self.V:
             v.pi = self.pi[v.k]
         # Check optimality gap
         pi_opt = np.sqrt(self.w) / np.sum(np.sqrt(self.w))
-        print(f'Opt: {np.sum(self.w / pi_opt)}, ours: {np.sum(self.w / self.pi)}')
+        print(f'Opt: {np.sum(self.w / pi_opt) / self.K}, ours: {np.sum(self.w / self.pi) / self.K}')
 
     def _pi(self, p):
-            param_agg = np.ones(self.K)  # 1 + sum_{k\neq k'}d_{k,k'}p_{k,k'}^\text{raw} for each PoI k
-            for v1, v2 in self.E:
-                param_agg[v1.k] += self.d[v1.k, v2.k] * p[v1.k, v2.k]
-            pi_res = np.sqrt(self.w / param_agg) / np.sum(np.sqrt(self.w * param_agg))
-            return pi_res
+        param_agg = np.ones(self.K)  # 1 + sum_{k\neq k'}d_{k,k'}p_{k,k'}^\text{raw} for each PoI k
+        for v1, v2 in self.E:
+            param_agg[v1.k] += self.d[v1.k, v2.k] * p[v1.k, v2.k]
+        pi_res = np.sqrt(self.w / param_agg) / np.sum(np.sqrt(self.w * param_agg))
+        return pi_res
 
     def _pick_epsilon(self, padding=1e-5, T_exp=1000):
         t0 = time.time()
@@ -148,22 +155,30 @@ class EpsilonRT:
 
         # [ICML'2013] Almost Optimal Exploration in Multi-Armed Bandits
         global arm_reward
-        def arm_reward(epsilon):
+        def arm_reward(epsilon, metric='AoI'):
             p = self.p_raw * epsilon
             for k in range(self.K):
                 p[k, k] = 1 - np.sum(p[k, :])
             x = self.x0
             t = 0
+            h = np.ones(self.K)
+            sum_h = np.zeros(self.K)
             visited_times = np.ones(self.K)
             while t < self.T:
                 visited_times[x] += 1
                 x_next = np.random.choice(self.K, p=p[x])
-                if x_next == x:
-                    t += 1
-                else:
-                    t += self.d[x, x_next] + 1
+                delta_t = 1 if x_next == x else self.d[x, x_next] + 1
+                for _ in range(delta_t):
+                    sum_h += h
+                    h += 1
+                h[x_next] = 1
+
+                t += delta_t
                 x = x_next
-            return np.sum(self.w / visited_times * self.T)
+            if metric == 'peak_AoI':
+                return np.sum(self.w / visited_times * self.T)
+            if metric == 'AoI':
+                return np.sum(self.w * sum_h / self.T)
 
         arms = list(range(K))
         empirical_sums = np.zeros(K)
@@ -187,13 +202,66 @@ class EpsilonRT:
         plt.title('Candidate epsilons $\\to$$ simulated Av PAoI')
         plt.show()
         self.epsilon = candidate_epsilons[best_arm]
-        print(f'Hyperparamter optimization time: {time.time() - t0} seconds')
+        print(f'Epsilon: {self.epsilon}, optimization time: {time.time() - t0} seconds')
 
-    def step(self, start: np.ndarray):
-        x_k = np.argmin([np.linalg.norm(v.q - start) for v in self.V])
-        x = self.V[int(x_k)]
-        x_next = self.rs.choice(self.V, p=self.p[x.k, :])
-        return x_next.q, 0, self.d[x.k, x_next.k] + 1
+    def step(self, q_current: np.ndarray, info):
+        poi_covered = info['covered']
+        r = info['estimated_r']
+        empirical_pi = info['visited_times'] / np.sum(info['visited_times']) * self.sum_pi
+
+        # Calculate the inter-cluster transition probability p_aggregate
+        poi_cluster_id = np.zeros(self.K).astype(int) - 1
+        uncovered_cluster_id, cluster_centers = disk_coverage_cluster(self.qk[poi_covered == 0], r)
+        poi_cluster_id[poi_covered == 0] = uncovered_cluster_id
+        cluster_centers[-1] = q_current
+        num_clusters = len(cluster_centers.keys())
+        # poi_cluster_id[poi_covered == 1] = num_clusters - 1
+        cluster_ids = list(cluster_centers.keys())
+        cluster_id_to_idx = {cluster_ids[n]: n for n in range(num_clusters)}
+
+        p_aggregate = np.zeros((num_clusters, num_clusters))
+        adj = np.diag([1] * num_clusters).astype(int)
+        for v1, v2 in self.E:
+            cid1, cid2 = poi_cluster_id[v1.k], poi_cluster_id[v2.k]
+            idx1, idx2 = cluster_id_to_idx[cid1], cluster_id_to_idx[cid2]
+            p_aggregate[idx1, idx2] += self.p[v1.k, v2.k]
+            adj[idx1, idx2] = 1
+        for v in self.V:
+            idx = cluster_id_to_idx[poi_cluster_id[v.k]]
+            p_aggregate[idx, idx] += self.p[v.k, v.k]
+        for k in range(num_clusters):
+            p_aggregate[k, :] /= np.sum(p_aggregate[k, :])
+        # adj_n_hops = [adj]
+        # adj_final = adj
+        # for _ in range(4):
+        #     adj_n_hops.append(np.dot(adj, adj[-1]))
+        #     adj_final += adj_n_hops[-1]
+
+        # Calculate the empirical pi for each cluster
+        empirical_pi_aggregate = np.zeros(num_clusters)
+        expected_pi_aggregate = np.zeros(num_clusters)
+        for v in self.V:
+            cid = poi_cluster_id[v.k]
+            idx = cluster_id_to_idx[cid]
+            empirical_pi_aggregate[idx] += empirical_pi[v.k]
+            expected_pi_aggregate[idx] += self.pi[v.k]
+
+        delta_pi_aggregate = empirical_pi_aggregate - expected_pi_aggregate
+        most_overvisted_cluster = np.argmax(delta_pi_aggregate * adj[-1])
+        overflow_trans_prob = p_aggregate[most_overvisted_cluster, most_overvisted_cluster] * 0.4
+        p_aggregate[most_overvisted_cluster, most_overvisted_cluster] -= overflow_trans_prob
+        total_lack_pi = np.sum(np.abs(delta_pi_aggregate) * (delta_pi_aggregate <= 0) * (adj[-1] == 1))
+        if total_lack_pi > 0:
+            for m in range(num_clusters):
+                if m == most_overvisted_cluster or adj[-1, m] == 0 or delta_pi_aggregate[m] >= 0:
+                    continue
+                p_aggregate[most_overvisted_cluster, m] += overflow_trans_prob * (-delta_pi_aggregate[m]) / total_lack_pi
+
+            cluster_next = self.rs.choice(num_clusters, p=p_aggregate[-1, :])
+            q_next = cluster_centers[cluster_ids[cluster_next]]
+        else:  # if no PoI is covered
+            q_next = cluster_centers[cluster_ids[int(np.argmin(delta_pi_aggregate))]]
+        return q_next, max(1, np.ceil(np.linalg.norm(q_next - q_current) / self.lamb_xoy))
 
     @staticmethod
     def build_edges(w, qk, x0=0):
@@ -234,7 +302,10 @@ class EpsilonRT:
             return np.ceil(np.linalg.norm(qk[k] - qk[target_k])) / hop
         for k in k_large_w:
             target_step = heapq.nsmallest(1, range(K // 4, K * 3 // 4), lambda hop: dis_div_hop(k, hop))[0]
-            # E.append((k, E[(visited_seq[k] + target_step) % len(E)][1]))
+            v1, v2 = k, E[(visited_seq[k] + target_step) % len(E)][1]
+            if (v1, v2) not in E and (v2, v1) not in E:
+                E.append((v1, v2))
+                E.append((v2, v1))
             # print(f'Connect Node {E[-1]}')
         return E
 
@@ -245,6 +316,8 @@ class EpsilonRT:
         for i, q in enumerate(qk):
             res_V.append(Vertex(w=w[i], is_virtual=False, index=i, q=q))
         for i, j in E:
+            if i == 96:
+                pass
             v1, v2 = res_V[i], res_V[j]
             res_E.append((v1, v2))
             v1.connect_to(v2)
@@ -271,5 +344,5 @@ if __name__ == '__main__':
 
     E = EpsilonRT.build_edges(w, qk)
     V, E = EpsilonRT.make_graph(w, qk, E)
-    G = EpsilonRT(V=V, E=E, epsilon=0.14356087610862445)
+    G = EpsilonRT(V=V, E=E, epsilon=0.091053067655531)
     G.display_graph(G.V, G.E, len(G.V))

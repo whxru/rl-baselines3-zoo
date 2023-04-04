@@ -42,6 +42,19 @@ def disk_coverage_cluster(qk, r):  # returns [the cluster id assigned to each Po
             res_cluster_centers[grid_id] = grid_center
             res_cluster_assigned.append(grid_id)
 
+    assert len(res_cluster_assigned) == len(qk)
+
+    # cid, centers = res_cluster_assigned, res_cluster_centers
+    # for i, q in enumerate(qk):
+    #     center = centers[cid[i]]
+    #     plt.plot([q[0], center[0]], [q[1], center[1]], c='g')
+    #     plt.scatter(q[0], q[1], c='b')
+    # for j, circle_center in enumerate(centers.values()):
+    #     circle = plt.Circle((circle_center[0], circle_center[1]), r, color=(.1, .1, .1, .1))
+    #     plt.gca().add_patch(circle)
+    #     plt.scatter(circle_center[0], circle_center[1], c='r')
+    # plt.show()
+
     return res_cluster_assigned, res_cluster_centers
 
 
