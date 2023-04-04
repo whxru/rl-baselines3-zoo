@@ -50,6 +50,9 @@ from rl_zoo3.hyperparams_opt import HYPERPARAMS_SAMPLER
 from rl_zoo3.utils import ALGOS, get_callback_list, get_class_by_name, get_latest_run_id, get_wrapper_class, linear_schedule
 from rl_zoo3.aoi_cbu.custom_eval_callback import CustomEvalCallback
 
+# Register custom feature extractor
+from rl_zoo3.aoi_uav.feature_extractor import CustomCnn
+
 
 class ExperimentManager:
     """

@@ -10,7 +10,7 @@ from rl_zoo3.aoi_uav.epsilon_rt import EpsilonRT
 
 class AoIUavTrajectoryPlanningEnv(gym.Env):
 
-    def __init__(self, observation_size=50, world_size=1000, K=50, T=2000, seed=0, pos_seed=2096, x0=0):
+    def __init__(self, observation_size=50, world_size=1000, K=50, T=1800, seed=0, pos_seed=2096, x0=0, learn_xoy=False):
         self.observation_size = observation_size
         self.world_size = world_size
         self.K = K
@@ -22,10 +22,11 @@ class AoIUavTrajectoryPlanningEnv(gym.Env):
         self.qk[:, -1] = 0
         self.w = self.config_rs.random(self.K)
         self.x0 = x0
+        self.learn_xoy = learn_xoy
 
         self.env_name = 'AoI-UAV'
         self.rs = np.random.RandomState(seed=seed) if seed > 0 else np.random
-        self.action_space = gym.spaces.Box(low=-1, high=1, shape=(1,))
+        self.action_space = gym.spaces.Box(low=-1, high=1, shape=(3 if self.learn_xoy else 1,))
         self.observation_space = gym.spaces.Box(low=0, high=self.K, shape=(2, self.observation_size, self.observation_size))
 
         self.beta = np.deg2rad(70)
@@ -146,19 +147,27 @@ class AoIUavTrajectoryPlanningEnv(gym.Env):
         plt.show()
 
     def step(self, action):
-        delta_z = action * self.lamb_z
+        delta_z = (action[2] if self.learn_xoy else action) * self.lamb_z
         self.qu[2] += delta_z
         self.qu[2] = max(self.qu[2], self.z_min)
         self.z_history.append(self.qu[2])
 
+        if self.learn_xoy:
+            rho = action[0] * np.pi * 2
+            l = action[1] * self.lamb_xoy
+            self.qu[0] += l * np.cos(l)
+            self.qu[1] += l * np.sin(l)
+
         current_p = self.p()
 
-        self.qu += self._current_delta_qu
+        if not self.learn_xoy:
+            self.qu += self._current_delta_qu
 
         self.yaw = np.random.random() * np.pi * 2
 
         current_poi_covered = self.covered()
         update_prob = current_p * current_poi_covered
+
         self.visited_times += update_prob
         self.expect_sum_h += self.expect_h
         self.expect_h = update_prob * np.ones(self.K) + (1 - update_prob) * (self.expect_h + 1)
@@ -174,21 +183,22 @@ class AoIUavTrajectoryPlanningEnv(gym.Env):
                 if self.t == self.T - 1:
                     self.actual_peak_h[k].append(self.actual_h[k])
 
-        if len(self._xoy_cmds) == 0 or np.linalg.norm(self.q_u_ground - self._xoy_cmds[-1]) <= 1e-2:
-            if len(self._xoy_cmds) > 0:  # to avoid cumulative bias
-                self.qu[0], self.qu[1], _ = self._xoy_cmds[-1]
-            q_current = self.q_u_ground
-            q_next, delta_t = self._xoy_agent.step(q_current, info={
-                'covered': current_poi_covered,
-                'estimated_r': self.estimated_r,
-                'visited_times': self.visited_times
-            })
-            self._current_delta_qu = (q_next - q_current) / delta_t
-            self._xoy_cmds.append(q_next)
+        if not self.learn_xoy:
+            if len(self._xoy_cmds) == 0 or np.linalg.norm(self.q_u_ground - self._xoy_cmds[-1]) <= 1e-2:
+                if len(self._xoy_cmds) > 0:  # to avoid cumulative bias
+                    self.qu[0], self.qu[1], _ = self._xoy_cmds[-1]
+                q_current = self.q_u_ground
+                q_next, delta_t = self._xoy_agent.step(q_current, info={
+                    'covered': current_poi_covered,
+                    'estimated_r': self.estimated_r,
+                    'visited_times': self.visited_times
+                })
+                self._current_delta_qu = (q_next - q_current) / delta_t
+                self._xoy_cmds.append(q_next)
 
         self.t += 1
         obs = self._compute_obs()
-        reward = np.dot(self.w, self.expect_h)
+        reward = - np.dot(self.w, self.expect_h)
         done = self.t >= self.T
         info = {}
 

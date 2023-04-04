@@ -23,7 +23,7 @@ warnings.simplefilter("ignore", FutureWarning)
 def train():
     parser = argparse.ArgumentParser()
     parser.add_argument("--algo", help="RL Algorithm", default="ppo", type=str, required=False, choices=list(ALGOS.keys()))
-    parser.add_argument("--env", type=str, default="gowalla-v1", help="environment ID")
+    parser.add_argument("--env", type=str, default="postdisaster-v1", help="environment ID")
     parser.add_argument("-tb", "--tensorboard-log", help="Tensorboard log dir", default="", type=str)
     parser.add_argument("-i", "--trained-agent", help="Path to a pretrained agent to continue training", default="", type=str)
     parser.add_argument(

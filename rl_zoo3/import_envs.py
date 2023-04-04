@@ -68,3 +68,10 @@ register(
     entry_point=HybridCentralizedAoICbuEnv,
     max_episode_steps=1440
 )
+
+from rl_zoo3.aoi_uav.env import AoIUavTrajectoryPlanningEnv
+
+register(
+    id="postdisaster-v1",
+    entry_point=AoIUavTrajectoryPlanningEnv
+)

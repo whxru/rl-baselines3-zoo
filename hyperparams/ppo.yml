@@ -1,5 +1,14 @@
 # soft_wanted seed: 2652834434
 # Trial 84 finished with value: -886.3704166666666 and parameters: {'n_steps': 512, 'batch_size': 512, 'gamma': 0.95, 'learning_rate': 0.0007956313998756121, 'ent_coef': 6.099661894667899e-08, 'clip_range': 0.1, 'n_epochs': 1, 'gae_lambda': 0.99, 'max_grad_norm': 5, 'vf_coef': 0.28965068821860424, 'policy_kwargs': {'net_arch': [128, 128], 'features_extractor_kwargs': {'env_target': 'gowalla', 'num_out_channel_feat': 32, 'num_out_channel_aoi': 32, 'computation_config': {'normalize_mu_feat_first': True, 'w_mult_y': False, 'activation_func': 'leaky_relu', 'use_gru': True, 'use_second_activation_func': True}}}}. Best is trial 84 with value: -886.3704166666666.
+postdisaster-v1:
+  n_envs: 1
+  policy: MlpPolicy
+  policy_kwargs: "dict(features_extractor_class=CustomCnn)"
+  n_steps: 128
+  n_epochs: 4
+  batch_size: 256
+  n_timesteps: 1800000
+
 gowalla-v1:
   n_envs: 1
   policy: rl_zoo3.aoi_cbu.custom_multi_input.CustomMultiInputPolicy
@@ -30,38 +39,7 @@ gowalla-v1:
             )
         )
     )"
-## soft_wanted seed: 4075664144
-## Trial 4 finished with value: -1116.730486111111
-#gowalla-v1:
-#  n_envs: 1
-#  policy: rl_zoo3.aoi_cbu.custom_multi_input.CustomMultiInputPolicy
-#  normalize: "dict(norm_obs_keys=['weight', 'AoI'])"
-#  n_timesteps: 28800000
-#  batch_size: 512
-#  n_steps: 1024
-#  gamma: 0.9
-#  learning_rate: 9.827165135814804e-05
-#  ent_coef: 1.573382848565391e-07
-#  clip_range: 0.3
-#  n_epochs: 5
-#  gae_lambda: 1.0
-#  max_grad_norm: 2
-#  vf_coef: 0.8125976006910388
-#  policy_kwargs: "dict(
-#        net_arch=[128, 128],
-#        features_extractor_class='dyna',
-#        features_extractor_kwargs=dict(
-#            num_out_channel_feat=64,
-#            num_out_channel_aoi=64,
-#            computation_config=dict(
-#                normalize_mu_feat_first=True,
-#                w_mult_y=False,
-#                activation_func='relu6',
-#                use_gru=True,
-#                use_second_activation_func=True,
-#            )
-#        )
-#    )"
+
 
 atari:
   env_wrapper:
