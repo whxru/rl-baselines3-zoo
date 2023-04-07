@@ -5,7 +5,7 @@ postdisaster-v1:
   policy: MlpPolicy
   policy_kwargs: "dict(features_extractor_class=CustomCnn)"
   n_steps: 128
-  n_epochs: 4
+  n_epochs: 10
   batch_size: 256
   n_timesteps: 1800000
 

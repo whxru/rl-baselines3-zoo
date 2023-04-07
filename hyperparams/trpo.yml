@@ -1,3 +1,9 @@
+postdisaster-v1:
+  n_envs: 1
+  n_timesteps: 90000
+  policy: MlpPolicy
+  policy_kwargs: "dict(features_extractor_class=CustomCnn)"
+
 # Tuned
 CartPole-v1:
   n_envs: 2

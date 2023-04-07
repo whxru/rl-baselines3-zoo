@@ -5,6 +5,7 @@ import math, random, heapq
 import matplotlib.pyplot as plt
 from multiprocessing import Pool
 from rl_zoo3.aoi_uav.disk_cluster import disk_coverage_cluster
+import scipy
 
 class Vertex:
 
@@ -264,11 +265,17 @@ class EpsilonRT:
         return q_next, max(1, np.ceil(np.linalg.norm(q_next - q_current) / self.lamb_xoy))
 
     @staticmethod
-    def build_edges(w, qk, x0=0):
+    def build_edges(w, qk, x0=0, r=200):
+        # dist_matrix = scipy.spatial.distance.cdist(qk, qk)
+        # return np.array(np.where(np.logical_and(0 < dist_matrix, dist_matrix <= r))).T.tolist()
+
+        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+        # The following method connects nodes by TSP heuristic  # # # # # # #
+        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
         visited_nodes = [x0]
         x_last = x0
         K = len(w)
-        k_large_w = heapq.nlargest(K // 10, range(K), key=lambda k: w[k])
+        k_large_w = heapq.nlargest(K // 5, range(K), key=lambda k: w[k])
 
         visited_seq = {k: 0 for k in k_large_w}
         E = []
@@ -293,7 +300,7 @@ class EpsilonRT:
                 visited_seq[nearest_node] = len(E) - 1
 
         E.append((x_last, x0))
-        # E.append((x0, x_last))
+        E.append((x0, x_last))
 
         def dis_div_hop(k, hop):
             if hop % K == 0:
@@ -307,6 +314,7 @@ class EpsilonRT:
                 E.append((v1, v2))
                 E.append((v2, v1))
             # print(f'Connect Node {E[-1]}')
+        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
         return E
 
     @staticmethod

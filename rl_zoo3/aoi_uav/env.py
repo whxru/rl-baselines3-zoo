@@ -10,7 +10,7 @@ from rl_zoo3.aoi_uav.epsilon_rt import EpsilonRT
 
 class AoIUavTrajectoryPlanningEnv(gym.Env):
 
-    def __init__(self, observation_size=50, world_size=1000, K=50, T=1800, seed=0, pos_seed=2096, x0=0, learn_xoy=False):
+    def __init__(self, observation_size=50, world_size=1000, K=50, T=1800, seed=0, pos_seed=2096, x0=0, learn_xoy=True):
         self.observation_size = observation_size
         self.world_size = world_size
         self.K = K
@@ -173,7 +173,7 @@ class AoIUavTrajectoryPlanningEnv(gym.Env):
         self.expect_h = update_prob * np.ones(self.K) + (1 - update_prob) * (self.expect_h + 1)
 
         self.actual_sum_h += self.actual_h
-        self.actual_update_result = (np.random.random(self.K) <= update_prob).astype(int)
+        self.actual_update_result = (self.rs.random(self.K) <= update_prob).astype(int)
         for k in range(self.K):
             if self.actual_update_result[k] == 1:
                 self.actual_peak_h[k].append(self.actual_h[k])
@@ -205,7 +205,7 @@ class AoIUavTrajectoryPlanningEnv(gym.Env):
         if done:
             av_pAoI = np.dot(self.w, np.array([np.mean(pAoI) for pAoI in self.actual_peak_h])) / self.K
             av_AoI = np.dot(self.w, self.expect_sum_h) / self.T / self.K
-            print(f'Average peak AoI: {av_pAoI}, average AoI: {av_AoI}')
+            # print(f'Average peak AoI: {av_pAoI}, average AoI: {av_AoI}')
             self.AoI_record.append(av_AoI)
 
         return obs, reward, done, info
@@ -237,8 +237,12 @@ class AoIUavTrajectoryPlanningEnv(gym.Env):
             pass
         return np.stack((grid_covered_poi_h, grid_covered_by_uav)).astype(np.float32)
 
-    def plot_obs(self, obs):
+    def plot_graph(self):
+        EpsilonRT.display_graph(self._xoy_agent.V, self._xoy_agent.E)
+
+    def plot_obs(self):
         # print(f'Current height: {self.qu[2]} meter')
+        obs = self._compute_obs()
         sns.heatmap(obs[0])
         plt.show()
         sns.heatmap(obs[1])
@@ -257,17 +261,22 @@ if __name__ == '__main__':
     from rl_zoo3.aoi_uav.epsilon_rt import EpsilonRT
     from stable_baselines3.common.env_checker import check_env
 
-    env = AoIUavTrajectoryPlanningEnv(world_size=1000, observation_size=50, T=1800, K=100)
+    env = AoIUavTrajectoryPlanningEnv(world_size=1000, observation_size=50, T=1800, K=100, learn_xoy=False)
     check_env(env)
+    env.plot_graph()
     t0 = time.time()
     obs = env.reset()
     done = False
+    fig = plt.figure()
+    ax = fig.add_subplot(projection='3d')
     while not done:
         # action = env.action_space.sample()
         action = 1 if env.qu[2] <= 40 else 0
         obs, reward, done, info = env.step(action)
-        if env.t % 200 == 0:
-            env.render()
+        ax.scatter(*env.qu)
+        if env.t % 1800 == 0:
+            plt.show()
+            # env.render()
     print(f'One episode consumes {time.time() - t0} seconds')
     # env.display_p_func()
 

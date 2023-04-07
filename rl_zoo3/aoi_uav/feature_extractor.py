@@ -10,9 +10,11 @@ class CustomCnn(BaseFeaturesExtractor):
         super().__init__(observation_space, features_dims)
         n_input_channels = observation_space.shape[0]
         self.cnn = nn.Sequential(
-            nn.Conv2d(n_input_channels, 32, kernel_size=8, stride=4, padding=0),
+            nn.Conv2d(n_input_channels, 128, kernel_size=8, stride=4, padding=0),
             nn.ReLU(),
-            nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=0),
+            nn.Conv2d(128, 256, kernel_size=4, stride=2, padding=0),
+            nn.ReLU(),
+            nn.Conv2d(256, 128, kernel_size=4, stride=2, padding=0),
             nn.ReLU(),
             nn.Flatten(),
         )

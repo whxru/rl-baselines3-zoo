@@ -11,20 +11,20 @@ import json
 import itertools
 
 
-candidate_policy_kwargs = [dict(
-        net_arch=net_arch,
-        features_extractor_kwargs=dict(
-            env_target='gowalla',
-            computation_config=dict(
-                activation_func=act,
-                net_dim=net_dim,
-            )
-        )
-    ) for net_arch, act, net_dim in itertools.product(
-        [[64, 64], [256, 256], [128, 128]],
-        ['tanh', 'leaky_relu', 'rrelu', 'relu6'],
-        [[1024, 512], [1024, 256], [512, 256], [512, 128], [256, 128], [256, 64], [128, 128], [128, 64], [64, 64]]  # use second act
-   )]
+# candidate_policy_kwargs = [dict(
+#         net_arch=net_arch,
+#         features_extractor_kwargs=dict(
+#             env_target='gowalla',
+#             computation_config=dict(
+#                 activation_func=act,
+#                 net_dim=net_dim,
+#             )
+#         )
+#     ) for net_arch, act, net_dim in itertools.product(
+#         [[64, 64], [256, 256], [128, 128]],
+#         ['tanh', 'leaky_relu', 'rrelu', 'relu6'],
+#         [[1024, 512], [1024, 256], [512, 256], [512, 128], [256, 128], [256, 64], [128, 128], [128, 64], [64, 64]]  # use second act
+#    )]
 
 
 def sample_ppo_simp_params(trial: optuna.Trial) -> Dict[str, Any]:
@@ -34,19 +34,19 @@ def sample_ppo_simp_params(trial: optuna.Trial) -> Dict[str, Any]:
     :param trial:
     :return:
     """
-    candidate_policy_kwargs = [dict(
-        net_arch=net_arch,
-        features_extractor_class='simp',
-        features_extractor_kwargs=dict(
-            env_target='gowalla',
-            linear_dims=linear_dims,
-            act_func=act
-        )
-    ) for net_arch, linear_dims, act in itertools.product(
-        [[64, 64], [256, 256], [128, 128]],
-        [[64, 64], [256, 256], [128, 128]],
-        ['tanh', 'leaky_relu', 'rrelu', 'relu6'],
-    )]
+    # candidate_policy_kwargs = [dict(
+    #     net_arch=net_arch,
+    #     features_extractor_class='simp',
+    #     features_extractor_kwargs=dict(
+    #         env_target='gowalla',
+    #         linear_dims=linear_dims,
+    #         act_func=act
+    #     )
+    # ) for net_arch, linear_dims, act in itertools.product(
+    #     [[64, 64], [256, 256], [128, 128]],
+    #     [[64, 64], [256, 256], [128, 128]],
+    #     ['tanh', 'leaky_relu', 'rrelu', 'relu6'],
+    # )]
 
     batch_size = trial.suggest_categorical("batch_size", [16, 32, 64, 128, 256, 512, 1024, 2048])
     # batch_size = trial.suggest_categorical("batch_size", [64, 256, 512, 1024, 4096, 6144, 8192])
@@ -85,7 +85,7 @@ def sample_ppo_simp_params(trial: optuna.Trial) -> Dict[str, Any]:
     # Independent networks usually work best
     # when not working with images
 
-    policy_kwargs = trial.suggest_categorical('policy_kwargs', candidate_policy_kwargs)
+    # policy_kwargs = trial.suggest_categorical('policy_kwargs', candidate_policy_kwargs)
     return {
         "n_steps": n_steps,
         "batch_size": batch_size,
@@ -97,7 +97,7 @@ def sample_ppo_simp_params(trial: optuna.Trial) -> Dict[str, Any]:
         "gae_lambda": gae_lambda,
         "max_grad_norm": max_grad_norm,
         "vf_coef": vf_coef,
-        "policy_kwargs": policy_kwargs
+        # "policy_kwargs": policy_kwargs
         # "sde_sample_freq": sde_sample_freq,
     }
 
@@ -145,7 +145,7 @@ def sample_ppo_params(trial: optuna.Trial) -> Dict[str, Any]:
     # Independent networks usually work best
     # when not working with images
 
-    policy_kwargs = trial.suggest_categorical('policy_kwargs', candidate_policy_kwargs)
+    # policy_kwargs = trial.suggest_categorical('policy_kwargs', candidate_policy_kwargs)
     return {
         "n_steps": n_steps,
         "batch_size": batch_size,
@@ -157,7 +157,7 @@ def sample_ppo_params(trial: optuna.Trial) -> Dict[str, Any]:
         "gae_lambda": gae_lambda,
         "max_grad_norm": max_grad_norm,
         "vf_coef": vf_coef,
-        "policy_kwargs": policy_kwargs
+        # "policy_kwargs": policy_kwargs
         # "sde_sample_freq": sde_sample_freq,
     }
 
@@ -175,18 +175,18 @@ def sample_trpo_params(trial: optuna.Trial) -> Dict[str, Any]:
     learning_rate = trial.suggest_loguniform("learning_rate", 1e-5, 1)
     lr_schedule = "constant"
     # Uncomment to enable learning rate schedule
-    # lr_schedule = trial.suggest_categorical('lr_schedule', ['linear', 'constant'])
-    # line_search_shrinking_factor = trial.suggest_categorical("line_search_shrinking_factor", [0.6, 0.7, 0.8, 0.9])
+    lr_schedule = trial.suggest_categorical('lr_schedule', ['linear', 'constant'])
+    line_search_shrinking_factor = trial.suggest_categorical("line_search_shrinking_factor", [0.6, 0.7, 0.8, 0.9])
     n_critic_updates = trial.suggest_categorical("n_critic_updates", [5, 10, 20, 25, 30])
     cg_max_steps = trial.suggest_categorical("cg_max_steps", [5, 10, 20, 25, 30])
-    # cg_damping = trial.suggest_categorical("cg_damping", [0.5, 0.2, 0.1, 0.05, 0.01])
+    cg_damping = trial.suggest_categorical("cg_damping", [0.5, 0.2, 0.1, 0.05, 0.01])
     target_kl = trial.suggest_categorical("target_kl", [0.1, 0.05, 0.03, 0.02, 0.01, 0.005, 0.001])
     gae_lambda = trial.suggest_categorical("gae_lambda", [0.8, 0.9, 0.92, 0.95, 0.98, 0.99, 1.0])
     net_arch = trial.suggest_categorical("net_arch", ["small", "medium"])
     # Uncomment for gSDE (continuous actions)
-    # log_std_init = trial.suggest_uniform("log_std_init", -4, 1)
+    log_std_init = trial.suggest_uniform("log_std_init", -4, 1)
     # Uncomment for gSDE (continuous action)
-    # sde_sample_freq = trial.suggest_categorical("sde_sample_freq", [-1, 8, 16, 32, 64, 128, 256])
+    sde_sample_freq = trial.suggest_categorical("sde_sample_freq", [-1, 8, 16, 32, 64, 128, 256])
     # Orthogonal initialization
     ortho_init = False
     # ortho_init = trial.suggest_categorical('ortho_init', [False, True])
@@ -213,14 +213,14 @@ def sample_trpo_params(trial: optuna.Trial) -> Dict[str, Any]:
         "n_steps": n_steps,
         "batch_size": batch_size,
         "gamma": gamma,
-        # "cg_damping": cg_damping,
+        "cg_damping": cg_damping,
         "cg_max_steps": cg_max_steps,
-        # "line_search_shrinking_factor": line_search_shrinking_factor,
+        "line_search_shrinking_factor": line_search_shrinking_factor,
         "n_critic_updates": n_critic_updates,
         "target_kl": target_kl,
         "learning_rate": learning_rate,
         "gae_lambda": gae_lambda,
-        # "sde_sample_freq": sde_sample_freq,
+        "sde_sample_freq": sde_sample_freq,
     }
 
 
@@ -430,7 +430,7 @@ def sample_ddpg_params(trial: optuna.Trial) -> Dict[str, Any]:
     # NOTE: Add "verybig" to net_arch when tuning HER (see TD3)
     # activation_fn = trial.suggest_categorical('activation_fn', [nn.Tanh, nn.ReLU, nn.ELU, nn.LeakyReLU])
 
-    policy_kwargs = trial.suggest_categorical('policy_kwargs', candidate_policy_kwargs)
+    # policy_kwargs = trial.suggest_categorical('policy_kwargs', candidate_policy_kwargs)
 
     hyperparams = {
         "gamma": gamma,
@@ -440,7 +440,7 @@ def sample_ddpg_params(trial: optuna.Trial) -> Dict[str, Any]:
         "buffer_size": buffer_size,
         "train_freq": train_freq,
         "gradient_steps": gradient_steps,
-        "policy_kwargs": policy_kwargs,
+        # "policy_kwargs": policy_kwargs,
     }
 
     if noise_type == "normal":
@@ -478,7 +478,7 @@ def sample_dqn_params(trial: optuna.Trial) -> Dict[str, Any]:
     subsample_steps = trial.suggest_categorical("subsample_steps", [1, 2, 4, 8])
     gradient_steps = max(train_freq // subsample_steps, 1)
 
-    policy_kwargs = trial.suggest_categorical('policy_kwargs', candidate_policy_kwargs)
+    # policy_kwargs = trial.suggest_categorical('policy_kwargs', candidate_policy_kwargs)
 
     hyperparams = {
         "gamma": gamma,
@@ -491,7 +491,7 @@ def sample_dqn_params(trial: optuna.Trial) -> Dict[str, Any]:
         "exploration_final_eps": exploration_final_eps,
         "target_update_interval": target_update_interval,
         "learning_starts": learning_starts,
-        "policy_kwargs": policy_kwargs,
+        # "policy_kwargs": policy_kwargs,
     }
 
     if trial.using_her_replay_buffer:

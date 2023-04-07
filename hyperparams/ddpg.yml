@@ -1,3 +1,9 @@
+postdisaster-v1:
+  n_envs: 1
+  n_timesteps: 900000
+  policy: MlpPolicy
+  policy_kwargs: "dict(features_extractor_class=CustomCnn)"
+
 gowalla-v1:
   n_envs: 5
   n_timesteps: !!float 4032e5
